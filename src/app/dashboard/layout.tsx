@@ -79,16 +79,14 @@ const signatorySchema = z.object({
 type SignatoryFormValues = z.infer<typeof signatorySchema>;
 
 
-function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (active: boolean) => void }) {
+function SignatoryManager({ onLockScreen, onSetPattern }: { onLockScreen: () => void; onSetPattern: () => void; }) {
     const { toast } = useToast();
     const [signatories, setSignatories] = useState<Signatory[]>([]);
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [patternDialogOpen, setPatternDialogOpen] = useState(false);
     const [isProprietor, setIsProprietor] = useState(false);
 
     useEffect(() => {
         const email = localStorage.getItem('userEmail');
-        // Simple check, assumes proprietor email is stored or known
         if(email === "seearun20@gmail.com"){
             setIsProprietor(true);
         }
@@ -126,12 +124,6 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
             toast({ variant: "destructive", title: "Error", description: "Could not remove signatory." });
         }
     }
-    
-    const handleSetPattern = (pattern: number[]) => {
-        localStorage.setItem('lockPattern', JSON.stringify(pattern));
-        toast({ title: 'Pattern Set!', description: 'Your new lock pattern has been saved.' });
-        setPatternDialogOpen(false);
-    };
 
     return (
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -146,18 +138,18 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                     <DropdownMenuSeparator />
                      {isProprietor && (
                          <>
-                            <DropdownMenuItem onSelect={() => setPatternDialogOpen(true)}>
+                            <DropdownMenuItem onSelect={onSetPattern}>
                                 <Lock className="mr-2 h-4 w-4" />
                                 <span>Set/Change Pattern</span>
                             </DropdownMenuItem>
-                             <DropdownMenuItem onSelect={() => setLockScreenActive(true)}>
+                             <DropdownMenuItem onSelect={onLockScreen}>
                                 <Lock className="mr-2 h-4 w-4" />
                                 <span>Lock Screen</span>
                             </DropdownMenuItem>
                          </>
                      )}
                      <DialogTrigger asChild>
-                        <DropdownMenuItem onSelect={() => {}}>
+                        <DropdownMenuItem>
                             <UserPlus className="mr-2 h-4 w-4" />
                             <span>Manage Signatories</span>
                         </DropdownMenuItem>
@@ -206,18 +198,6 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                     </Form>
                 </div>
             </DialogContent>
-            
-            <Dialog open={patternDialogOpen} onOpenChange={setPatternDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Set Lock Pattern</DialogTitle>
-                        <DialogDescription>
-                            Click and drag to set a new pattern. Release to confirm.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <PatternLock onPatternComplete={handleSetPattern} mode="set" />
-                </DialogContent>
-            </Dialog>
         </Dialog>
     );
 }
@@ -229,16 +209,19 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { toast } = useToast();
   const [isLocked, setIsLocked] = useState(false);
   const [lockPattern, setLockPattern] = useState<number[] | null>(null);
+  const [patternDialogOpen, setPatternDialogOpen] = useState(false);
+  const [isInitialLockCheck, setIsInitialLockCheck] = useState(true);
 
   useEffect(() => {
-    // Check if pattern exists on mount
     const storedPattern = localStorage.getItem('lockPattern');
     if (storedPattern) {
         setLockPattern(JSON.parse(storedPattern));
-        setIsLocked(true); // Lock screen if pattern is set
+        setIsLocked(true);
     }
+    setIsInitialLockCheck(false);
   }, []);
 
 
@@ -246,7 +229,6 @@ export default function DashboardLayout({
     const loginDate = localStorage.getItem('loginDate');
     const today = new Date().toISOString().split('T')[0];
     if (loginDate !== today) {
-        // Clear session and redirect to login
         localStorage.removeItem('loginDate');
         localStorage.removeItem('userEmail');
         router.push('/');
@@ -266,14 +248,39 @@ export default function DashboardLayout({
   const handleUnlock = () => {
       setIsLocked(false);
   };
+  
+  const handleSetPattern = (pattern: number[]) => {
+    localStorage.setItem('lockPattern', JSON.stringify(pattern));
+    setLockPattern(pattern);
+    toast({ title: 'Pattern Set!', description: 'Your new lock pattern has been saved.' });
+    setPatternDialogOpen(false);
+  };
+  
+  const handleLockScreen = () => {
+    if (lockPattern) {
+      setIsLocked(true);
+    } else {
+      toast({ title: 'No Pattern Set', description: 'Please set a lock pattern first.' });
+      setPatternDialogOpen(true);
+    }
+  };
 
-  if (isLocked && lockPattern) {
+
+  if (isInitialLockCheck) {
+      return (
+          <div className="w-screen h-screen bg-background flex items-center justify-center">
+              <Loader2 className="animate-spin h-8 w-8 text-primary"/>
+          </div>
+      )
+  }
+
+  if (isLocked) {
       return (
           <div className="w-screen h-screen bg-background flex flex-col items-center justify-center">
               <RtfLogo className="w-24 h-24 mb-4 text-primary" />
               <h2 className="text-2xl font-bold font-headline text-primary mb-2">Screen Locked</h2>
               <p className="text-muted-foreground mb-8">Enter your pattern to unlock.</p>
-              <PatternLock onPatternComplete={handleUnlock} mode="verify" savedPattern={lockPattern} />
+              <PatternLock onPatternComplete={handleUnlock} mode="verify" savedPattern={lockPattern!} />
           </div>
       );
   }
@@ -398,12 +405,23 @@ export default function DashboardLayout({
         <header className="flex items-center justify-between p-4 bg-background border-b">
            <SidebarTrigger className="md:hidden"/>
            <div className="flex-1"></div>
-           <SignatoryManager setLockScreenActive={setIsLocked} />
+           <SignatoryManager onLockScreen={handleLockScreen} onSetPattern={() => setPatternDialogOpen(true)} />
         </header>
         <main className="p-4 sm:p-6 lg:p-8 bg-background">
             {children}
         </main>
       </SidebarInset>
+        <Dialog open={patternDialogOpen} onOpenChange={setPatternDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Set Lock Pattern</DialogTitle>
+                    <DialogDescription>
+                        Click and drag to set a new pattern. Release to confirm.
+                    </DialogDescription>
+                </DialogHeader>
+                <PatternLock onPatternComplete={handleSetPattern} mode="set" />
+            </DialogContent>
+        </Dialog>
     </SidebarProvider>
   );
 }
