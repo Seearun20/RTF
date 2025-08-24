@@ -140,7 +140,7 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                     <Button variant="ghost" size="icon">
                         <User />
                     </Button>
-                DropdownMenuTrigger>
+                </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                     <DropdownMenuSeparator />
