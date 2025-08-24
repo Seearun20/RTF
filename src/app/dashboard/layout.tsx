@@ -157,7 +157,7 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                          </>
                      )}
                      <DialogTrigger asChild>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setDialogOpen(true)}>
                             <UserPlus className="mr-2 h-4 w-4" />
                             <span>Manage Signatories</span>
                         </DropdownMenuItem>
@@ -409,3 +409,5 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
+
+    
