@@ -1,0 +1,17 @@
+# render.yaml
+services:
+  - type: web
+    name: raghav-tailors
+    env: node
+    plan: free # or your desired plan
+    buildCommand: 'npm install && npm run build'
+    startCommand: 'npm start'
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: EMAIL_SERVER_USER
+        sync: false
+      - key: EMAIL_SERVER_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
