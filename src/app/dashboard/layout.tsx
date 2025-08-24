@@ -1,3 +1,4 @@
+
 "use client"
 import Link from "next/link";
 import {
@@ -9,6 +10,7 @@ import {
   LogOut,
   Shirt,
   HandPlatter,
+  View,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -75,6 +77,14 @@ export default function DashboardLayout({
                 </AccordionTrigger>
                 <AccordionContent className="p-0 pl-4">
                    <SidebarMenu className="py-2">
+                      <SidebarMenuItem>
+                        <Link href="/dashboard/stock" passHref>
+                          <SidebarMenuButton isActive={isActive('/dashboard/stock')} variant="ghost" size="sm">
+                            <View />
+                            <span>Overview</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
                       <SidebarMenuItem>
                         <Link href="/dashboard/stock/readymade" passHref>
                           <SidebarMenuButton isActive={isActive('/dashboard/stock/readymade')} variant="ghost" size="sm">
