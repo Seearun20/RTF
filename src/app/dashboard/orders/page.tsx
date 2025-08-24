@@ -58,9 +58,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Invoice } from "@/components/dashboard/invoice";
+import { InvoicePrintWrapper } from "@/components/dashboard/invoice";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, DocumentData, QueryDocumentSnapshot, query, orderBy } from "firebase/firestore";
 import { MeasurementSlip } from "@/components/dashboard/measurement-slip";
 
 // Re-defining the Order interface here based on what's stored in Firestore
@@ -78,6 +78,7 @@ export interface Order {
     readymadeSize?: string;
     fabricId?: string;
     measurements?: { [key: string]: string | undefined };
+    createdAt: any; // Using any for Firestore Timestamp for simplicity
 }
 
 function getOrderItems(order: Order) {
@@ -152,9 +153,9 @@ export default function OrdersPage() {
   });
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
+    const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
         const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<Order, 'id'>) }));
-        ordersData.sort((a, b) => b.createdAt.toDate() - a.createdAt.toDate());
         setOrders(ordersData);
     });
     return () => unsubscribe();
@@ -327,13 +328,7 @@ export default function OrdersPage() {
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                {invoiceData && (
                  <DialogContent className="max-w-3xl p-0">
-                    <DialogHeader className="p-6 pb-0">
-                        <DialogTitle>Invoice #{currentOrder.orderId}</DialogTitle>
-                        <DialogDescription>
-                            Review the invoice details below before printing.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <Invoice order={invoiceData} />
+                    <InvoicePrintWrapper order={invoiceData} />
                 </DialogContent>
                )}
             </Dialog>
