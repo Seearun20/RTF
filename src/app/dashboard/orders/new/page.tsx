@@ -222,11 +222,15 @@ export default function NewOrderPage() {
             
             let itemRef;
             let itemDoc;
+            let soldOutItemName: string | null = null;
             if (data.orderType === 'readymade' && data.readymadeItemId) {
               itemRef = doc(db, 'readyMadeStock', data.readymadeItemId);
               itemDoc = await transaction.get(itemRef);
               if (!itemDoc.exists() || itemDoc.data().quantity < 1) {
                   throw new Error("Item is out of stock.");
+              }
+              if (itemDoc.data().quantity === 1) {
+                  soldOutItemName = `${itemDoc.data().item} (Size: ${itemDoc.data().size})`;
               }
             }
 
@@ -257,7 +261,12 @@ export default function NewOrderPage() {
             }
 
             if (itemRef && itemDoc) {
-                 transaction.update(itemRef, { quantity: itemDoc.data().quantity - 1 });
+                const newQuantity = itemDoc.data().quantity - 1;
+                if (newQuantity > 0) {
+                    transaction.update(itemRef, { quantity: newQuantity });
+                } else {
+                    transaction.delete(itemRef);
+                }
             }
 
             const orderData = {
@@ -291,6 +300,16 @@ export default function NewOrderPage() {
                 measurements: data.measurements,
                 imageUrl: data.readymadeItemImageUrl,
             });
+
+            if (soldOutItemName) {
+                setTimeout(() => {
+                     toast({
+                        variant: "destructive",
+                        title: "Stock Alert: Item Sold Out",
+                        description: `${soldOutItemName} is now out of stock and has been removed.`
+                    });
+                }, 500); // Delay to ensure it appears after the success toast
+            }
         });
 
         setDialogs(prev => ({...prev, postOrder: true}));
@@ -685,3 +704,4 @@ export default function NewOrderPage() {
     
 
     
+
