@@ -211,10 +211,12 @@ export default function NewOrderPage() {
   const watchedValues = watch();
   
   const totalBill = useMemo(() => {
-    const servicePrice = watchedValues.orderType === 'stitching' ? (watchedValues.sellingPrice || 0) : 0;
-    const fabricPrice = watchedValues.orderType === 'stitching' ? (watchedValues.stitchingFabricPrice || 0) : 0;
-    const directSalePrice = (watchedValues.orderType === 'readymade' || watchedValues.orderType === 'fabric') ? (watchedValues.sellingPrice || 0) : 0;
-    return servicePrice + fabricPrice + directSalePrice;
+    if (watchedValues.orderType === 'stitching') {
+        const servicePrice = watchedValues.sellingPrice || 0;
+        const fabricPrice = watchedValues.stitchingFabricPrice || 0;
+        return servicePrice + fabricPrice;
+    }
+    return watchedValues.sellingPrice || 0;
   }, [watchedValues]);
 
   const handleFetchMeasurements = async () => {
@@ -775,3 +777,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    
