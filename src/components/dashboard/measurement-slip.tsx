@@ -27,12 +27,9 @@ interface MeasurementSlipProps {
 export function MeasurementSlip({ order }: MeasurementSlipProps) {
     if (!order.measurements || Object.values(order.measurements).every(v => !v || v.trim() === '')) {
         return (
-             <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>No Measurements Recorded</DialogTitle>
-                    <DialogDescription>There are no measurements recorded for order #{order.id}.</DialogDescription>
-                </DialogHeader>
-             </DialogContent>
+             <div>
+                <p className="text-center text-muted-foreground py-8">No measurements have been recorded for this order.</p>
+             </div>
         )
     }
     
@@ -161,13 +158,7 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
     }
 
   return (
-    <DialogContent className="sm:max-w-sm">
-        <DialogHeader className="print:hidden">
-            <DialogTitle>Measurement Slip</DialogTitle>
-            <DialogDescription>
-                A printable slip with customer measurements for the tailor.
-            </DialogDescription>
-        </DialogHeader>
+    <>
         <div id="measurement-slip-content">
             <div className="slip-header text-center mb-4">
                 <RtfLogo className="w-12 h-12 text-lg mx-auto" />
@@ -201,6 +192,8 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
               <Printer className="mr-2 h-4 w-4"/> Print Slip
           </Button>
       </DialogFooter>
-    </DialogContent>
+    </>
   );
 }
+
+    

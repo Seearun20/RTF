@@ -21,7 +21,7 @@ import {
 import { serviceCharges } from "@/lib/data";
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { useForm } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -665,7 +665,15 @@ export default function NewOrderPage() {
             </Dialog>
 
             <Dialog open={dialogs.measurementSlip} onOpenChange={(open) => setDialogs(p => ({...p, measurementSlip: open}))}>
-                 <MeasurementSlip order={lastSavedOrder}/>
+                 <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Measurement Slip</DialogTitle>
+                        <DialogDescription>
+                            A printable slip with customer measurements for the tailor.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <MeasurementSlip order={lastSavedOrder}/>
+                 </DialogContent>
             </Dialog>
         </>
       )}
@@ -673,6 +681,7 @@ export default function NewOrderPage() {
     </div>
   );
 }
-
     
+    
+
     
