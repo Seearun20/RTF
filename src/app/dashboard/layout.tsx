@@ -62,6 +62,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { db } from "@/lib/firebase";
 import { collection, addDoc, onSnapshot, deleteDoc, doc, DocumentData } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
 
 interface Signatory {
     id: string;
