@@ -36,7 +36,7 @@ interface Signatory {
     email: string;
 }
 
-const PROPRIETOR_EMAIL = "seearun20@gmail.com";
+const PROPRIETOR_EMAIL = "kumarsanjeev19255@gmail.com";
 
 const LoginSchema = z.object({
   role: z.string().min(1, "Please select a role."),
