@@ -5,12 +5,12 @@ export function RtfLogo(props: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        "flex items-center justify-center font-headline font-bold text-2xl bg-primary text-primary-foreground rounded-md",
+      "flex items-center justify-center rounded-md overflow-hidden",
         props.className
       )}
       {...props}
     >
-      RTF
+   <Image src="/logo.jpg" alt="Raghav Tailors & Fabrics Logo" width={96} height={96} className="object-cover"/>
     </div>
   );
 }
