@@ -134,7 +134,7 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
     };
 
     return (
-        <>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon">
@@ -157,7 +157,7 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                          </>
                      )}
                      <DialogTrigger asChild>
-                        <DropdownMenuItem onSelect={() => setDialogOpen(true)}>
+                        <DropdownMenuItem onSelect={() => {}}>
                             <UserPlus className="mr-2 h-4 w-4" />
                             <span>Manage Signatories</span>
                         </DropdownMenuItem>
@@ -168,46 +168,44 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Manage Signatories</DialogTitle>
-                        <DialogDescription>
-                            Add or remove users who can sign in to the application.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-6">
-                        <div className="space-y-4 max-h-64 overflow-y-auto pr-4">
-                            {signatories.length > 0 ? signatories.map(s => (
-                                <div key={s.id} className="flex items-center justify-between p-2 bg-muted rounded-md">
-                                    <div>
-                                        <p className="font-medium">{s.name}</p>
-                                        <p className="text-sm text-muted-foreground">{s.email}</p>
-                                    </div>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
-                                        <Trash2 className="h-4 w-4 text-destructive"/>
-                                    </Button>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Manage Signatories</DialogTitle>
+                    <DialogDescription>
+                        Add or remove users who can sign in to the application.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                    <div className="space-y-4 max-h-64 overflow-y-auto pr-4">
+                        {signatories.length > 0 ? signatories.map(s => (
+                            <div key={s.id} className="flex items-center justify-between p-2 bg-muted rounded-md">
+                                <div>
+                                    <p className="font-medium">{s.name}</p>
+                                    <p className="text-sm text-muted-foreground">{s.email}</p>
                                 </div>
-                            )) : <p className="text-sm text-center text-muted-foreground py-4">No signatories added yet.</p>}
-                        </div>
-
-                        <Separator/>
-
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                <p className="font-semibold text-sm">Add New Signatory</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Signatory's name" {...field}/></FormControl><FormMessage/></FormItem>)} />
-                                    <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="signatory@email.com" {...field}/></FormControl><FormMessage/></FormItem>)} />
-                                </div>
-                                <Button type="submit" disabled={form.formState.isSubmitting}>
-                                    {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Add Signatory"}
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
+                                    <Trash2 className="h-4 w-4 text-destructive"/>
                                 </Button>
-                            </form>
-                        </Form>
+                            </div>
+                        )) : <p className="text-sm text-center text-muted-foreground py-4">No signatories added yet.</p>}
                     </div>
-                </DialogContent>
-            </Dialog>
+
+                    <Separator/>
+
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <p className="font-semibold text-sm">Add New Signatory</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Signatory's name" {...field}/></FormControl><FormMessage/></FormItem>)} />
+                                <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="signatory@email.com" {...field}/></FormControl><FormMessage/></FormItem>)} />
+                            </div>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Add Signatory"}
+                            </Button>
+                        </form>
+                    </Form>
+                </div>
+            </DialogContent>
             
             <Dialog open={patternDialogOpen} onOpenChange={setPatternDialogOpen}>
                 <DialogContent>
@@ -220,7 +218,7 @@ function SignatoryManager({ setLockScreenActive }: { setLockScreenActive: (activ
                     <PatternLock onPatternComplete={handleSetPattern} mode="set" />
                 </DialogContent>
             </Dialog>
-        </>
+        </Dialog>
     );
 }
 
@@ -409,5 +407,3 @@ export default function DashboardLayout({
     </SidebarProvider>
   );
 }
-
-    
