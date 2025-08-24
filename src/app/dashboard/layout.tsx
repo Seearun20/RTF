@@ -79,8 +79,7 @@ const signatorySchema = z.object({
 type SignatoryFormValues = z.infer<typeof signatorySchema>;
 
 
-function SignatoryManager({ onLockScreen, onSetPattern }: { onLockScreen: () => void; onSetPattern: () => void; }) {
-    const { toast } = useToast();
+function SignatoryManager({ onLockScreen, onSetPattern, toast }: { onLockScreen: () => void; onSetPattern: () => void; toast: (options: any) => void; }) {
     const [signatories, setSignatories] = useState<Signatory[]>([]);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [isProprietor, setIsProprietor] = useState(false);
@@ -405,7 +404,11 @@ export default function DashboardLayout({
         <header className="flex items-center justify-between p-4 bg-background border-b">
            <SidebarTrigger className="md:hidden"/>
            <div className="flex-1"></div>
-           <SignatoryManager onLockScreen={handleLockScreen} onSetPattern={() => setPatternDialogOpen(true)} />
+           <SignatoryManager 
+              onLockScreen={handleLockScreen} 
+              onSetPattern={() => setPatternDialogOpen(true)}
+              toast={toast} 
+            />
         </header>
         <main className="p-4 sm:p-6 lg:p-8 bg-background">
             {children}
