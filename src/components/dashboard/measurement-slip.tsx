@@ -13,7 +13,6 @@ import { Printer } from "lucide-react";
 import { StitchSavvyLogo } from "../stitch-savvy-logo";
 import { Separator } from "../ui/separator";
 
-// This interface is now more generic to accept order data from different sources
 interface MeasurementSlipProps {
     order: {
         id: string;
@@ -39,25 +38,108 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
     
     const handlePrint = () => {
         const printContent = document.getElementById('measurement-slip-content');
-        const originalContents = document.body.innerHTML;
         if(printContent) {
             const printableArea = printContent.innerHTML;
             const printWindow = window.open('', '_blank');
             printWindow?.document.write(`
                 <html>
                     <head>
-                        <title>Print Slip</title>
-                        <link rel="stylesheet" href="/globals.css">
+                        <title>Measurement Slip - ${order.id}</title>
                         <style>
-                            @media print {
-                                body { 
-                                    -webkit-print-color-adjust: exact; 
-                                    padding: 1rem;
-                                }
+                            @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Literata:wght@400;700&display=swap');
+                            
+                            body { 
+                                font-family: 'Literata', serif;
+                                margin: 0;
+                                padding: 0;
+                                -webkit-print-color-adjust: exact; 
+                            }
+                            .slip-container {
+                                width: 302px; /* Approx 80mm thermal receipt paper width */
+                                padding: 16px;
+                                box-sizing: border-box;
+                                color: #000;
+                            }
+                            .slip-header {
+                                text-align: center;
+                                margin-bottom: 16px;
+                            }
+                            .slip-header .logo {
+                                color: #4B0082;
+                                width: 48px;
+                                height: 48px;
+                                margin: 0 auto;
+                            }
+                            .slip-header h1 {
+                                font-family: 'Playfair Display', serif;
+                                font-size: 1.25rem;
+                                margin: 8px 0 4px;
+                                color: #4B0082;
+                            }
+                            .slip-header p {
+                                font-size: 0.8rem;
+                                margin: 0;
+                                color: #555;
+                            }
+                            .slip-separator {
+                                border-top: 1px dashed #888;
+                                margin: 16px 0;
+                            }
+                            .measurement-grid {
+                                display: grid;
+                                grid-template-columns: 1fr 1fr;
+                                gap: 8px 16px;
+                                font-size: 0.9rem;
+                                font-family: monospace;
+                            }
+                            .measurement-item {
+                                display: flex;
+                                justify-content: space-between;
+                                border-bottom: 1px dotted #ccc;
+                                padding-bottom: 4px;
+                            }
+                            .measurement-item .label {
+                                text-transform: capitalize;
+                                color: #333;
+                            }
+                             .measurement-item .value {
+                                font-weight: bold;
+                            }
+                            .notes-section {
+                                margin-top: 16px;
+                            }
+                            .notes-section .notes-title {
+                                text-transform: uppercase;
+                                font-size: 0.75rem;
+                                font-weight: bold;
+                                color: #333;
+                                letter-spacing: 0.5px;
+                                margin-bottom: 4px;
+                            }
+                            .notes-section .notes-content {
+                                font-size: 0.85rem;
+                                white-space: pre-wrap;
+                                background-color: #f7f7f7;
+                                padding: 8px;
+                                border-radius: 4px;
+                            }
+                            .slip-footer {
+                                margin-top: 16px;
+                                text-align: center;
+                                font-size: 0.8rem;
+                                color: #555;
+                            }
+                            @page {
+                                size: 80mm auto;
+                                margin: 0;
                             }
                         </style>
                     </head>
-                    <body>${printableArea}</body>
+                    <body>
+                        <div class="slip-container">
+                            ${printableArea}
+                        </div>
+                    </body>
                 </html>
             `);
             // A delay to ensure stylesheet loads
@@ -71,39 +153,38 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
     }
 
   return (
-    <DialogContent className="sm:max-w-md">
+    <DialogContent className="sm:max-w-sm">
         <div id="measurement-slip-content">
-            <DialogHeader className="text-left">
-                <div className="flex items-center gap-4">
-                    <StitchSavvyLogo className="w-12 h-12 text-primary" />
-                    <div>
-                        <DialogTitle className="font-headline text-2xl">Measurement Slip</DialogTitle>
-                        <DialogDescription>Order #{order.id} for {order.customerName}</DialogDescription>
-                    </div>
-                </div>
-            </DialogHeader>
-            <div className="font-mono text-sm space-y-2 py-4">
-                <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                    {Object.entries(order.measurements).map(([key, value]) => value && key !== 'notes' && (
-                        <div key={key} className="flex justify-between border-b pb-1">
-                            <span className="capitalize text-muted-foreground">{key.replace(/([A-Z])/g, ' $1')}:</span>
-                            <span className="font-bold">{value}</span>
-                        </div>
-                    ))}
-                </div>
-                {order.measurements.notes && (
-                    <div className="pt-4">
-                        <p className="text-muted-foreground font-sans uppercase text-xs tracking-wider">Notes</p>
-                        <Separator className="my-1"/>
-                        <p className="whitespace-pre-wrap font-sans">{order.measurements.notes}</p>
-                    </div>
-                )}
+            <div className="slip-header text-center mb-4">
+                <StitchSavvyLogo className="w-12 h-12 text-primary mx-auto" />
+                <h1 className="font-headline text-xl font-bold text-primary mt-2">Measurement Slip</h1>
+                <p className="text-sm text-muted-foreground">Order #{order.id}</p>
             </div>
-            <p className="text-xs text-muted-foreground text-center">Delivery Date: {order.deliveryDate}</p>
+            <Separator className="my-4"/>
+            <div className="space-y-2 text-sm mb-4">
+                <div className="flex justify-between"><span className="font-semibold">Customer:</span><span>{order.customerName}</span></div>
+                <div className="flex justify-between"><span className="font-semibold">Delivery:</span><span>{order.deliveryDate}</span></div>
+            </div>
+
+            <div className="measurement-grid grid grid-cols-2 gap-x-8 gap-y-2 font-mono text-sm">
+                {Object.entries(order.measurements).map(([key, value]) => value && key !== 'notes' && (
+                    <div key={key} className="measurement-item flex justify-between border-b pb-1">
+                        <span className="label capitalize text-muted-foreground">{key.replace(/([A-Z])/g, ' $1')}:</span>
+                        <span className="value font-bold">{value}</span>
+                    </div>
+                ))}
+            </div>
+            {order.measurements.notes && (
+                <div className="notes-section mt-4">
+                    <p className="notes-title text-muted-foreground font-sans uppercase text-xs tracking-wider">Notes</p>
+                    <Separator className="my-1"/>
+                    <p className="notes-content whitespace-pre-wrap font-sans text-sm bg-muted p-2 rounded-md">{order.measurements.notes}</p>
+                </div>
+            )}
         </div>
-      <DialogFooter className="mt-4 sm:justify-start">
+      <DialogFooter className="mt-6 sm:justify-start print:hidden">
           <Button onClick={handlePrint} className="w-full">
-              <Printer className="mr-2"/> Print Slip
+              <Printer className="mr-2 h-4 w-4"/> Print Slip
           </Button>
       </DialogFooter>
     </DialogContent>
