@@ -69,10 +69,10 @@ export default function DashboardPage() {
 
     useEffect(() => {
         // Calculate financials
-        const totalSales = orders.reduce((sum, order) => sum + order.sellingPrice, 0);
+        const totalSales = orders.reduce((sum, order) => sum + Number(order.sellingPrice || 0), 0);
         
-        const readyMadePurchases = readyMadeStock.reduce((sum, item) => sum + (item.cost * item.quantity), 0);
-        const fabricPurchases = fabricStock.reduce((sum, item) => sum + (item.costPerMtr * item.length), 0);
+        const readyMadePurchases = readyMadeStock.reduce((sum, item) => sum + (Number(item.cost || 0) * Number(item.quantity || 0)), 0);
+        const fabricPurchases = fabricStock.reduce((sum, item) => sum + (Number(item.costPerMtr || 0) * Number(item.length || 0)), 0);
         const totalPurchases = readyMadePurchases + fabricPurchases;
         
         const totalProfit = totalSales - totalPurchases;
@@ -98,9 +98,9 @@ export default function DashboardPage() {
             const date = order.createdAt.toDate();
             const month = date.toLocaleString('default', { month: 'short' });
             if (monthlySales[month]) {
-                monthlySales[month] += order.sellingPrice;
+                monthlySales[month] += Number(order.sellingPrice || 0);
             } else {
-                monthlySales[month] = order.sellingPrice;
+                monthlySales[month] = Number(order.sellingPrice || 0);
             }
         });
 
@@ -241,5 +241,7 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
 
     
