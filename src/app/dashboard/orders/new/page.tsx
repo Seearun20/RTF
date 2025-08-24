@@ -74,6 +74,8 @@ const orderSchema = z.object({
   deliveryDate: z.string().min(1, "Delivery date is required"),
   
   stitchingService: z.string().optional(),
+  stitchingFabricLength: z.coerce.number().optional(),
+  stitchingFabricPrice: z.coerce.number().optional(),
   measurements: measurementSchema.optional(),
   
   readymadeItemId: z.string().optional(),
@@ -84,7 +86,7 @@ const orderSchema = z.object({
   fabricId: z.string().optional(),
   fabricLength: z.coerce.number().optional(),
 
-  sellingPrice: z.coerce.number().min(1, "Selling price is required"),
+  sellingPrice: z.coerce.number().min(0, "Price is required"),
   advance: z.coerce.number().optional().default(0),
 
 }).refine(data => {
@@ -157,12 +159,13 @@ export default function NewOrderPage() {
   
   const dynamicOrderSchema = useMemo(() => {
     return orderSchema.refine(data => {
-        if (data.orderType !== 'fabric' || !data.fabricId || !data.fabricLength) {
+        const fabricLength = data.orderType === 'fabric' ? data.fabricLength : data.stitchingFabricLength;
+        if (!data.fabricId || !fabricLength) {
             return true;
         }
         const selectedFabric = fabricStock.find(f => f.id === data.fabricId);
         if (!selectedFabric) return false;
-        return data.fabricLength <= selectedFabric.length;
+        return fabricLength <= selectedFabric.length;
     }, {
         message: "Cannot sell more fabric than is available in stock.",
         path: ['fabricLength'],
@@ -187,6 +190,8 @@ export default function NewOrderPage() {
       readymadeItemImageUrl: "",
       fabricId: "",
       fabricLength: 0,
+      stitchingFabricLength: 0,
+      stitchingFabricPrice: 0,
       sellingPrice: 0,
       advance: 0,
       measurements: {
@@ -204,6 +209,13 @@ export default function NewOrderPage() {
 
   const { formState: { isSubmitting }, watch, setValue, getValues } = form;
   const watchedValues = watch();
+  
+  const totalBill = useMemo(() => {
+    const servicePrice = watchedValues.orderType === 'stitching' ? (watchedValues.sellingPrice || 0) : 0;
+    const fabricPrice = watchedValues.orderType === 'stitching' ? (watchedValues.stitchingFabricPrice || 0) : 0;
+    const directSalePrice = (watchedValues.orderType === 'readymade' || watchedValues.orderType === 'fabric') ? (watchedValues.sellingPrice || 0) : 0;
+    return servicePrice + fabricPrice + directSalePrice;
+  }, [watchedValues]);
 
   const handleFetchMeasurements = async () => {
     const customerId = getValues("customerId");
@@ -230,6 +242,7 @@ export default function NewOrderPage() {
         await runTransaction(db, async (transaction) => {
             let customerId = data.customerId;
             let customerName: string | undefined;
+            const finalTotalBill = totalBill;
 
             // --- ALL READS MUST GO FIRST ---
             const invoiceCounterRef = doc(db, 'metadata', 'invoiceCounter');
@@ -251,10 +264,11 @@ export default function NewOrderPage() {
 
             let fabricRef;
             let fabricDoc;
-            if (data.orderType === 'fabric' && data.fabricId && data.fabricLength) {
+            const fabricLengthToDeduct = data.orderType === 'fabric' ? data.fabricLength : data.stitchingFabricLength;
+            if (data.fabricId && fabricLengthToDeduct && fabricLengthToDeduct > 0) {
                 fabricRef = doc(db, 'fabricStock', data.fabricId);
                 fabricDoc = await transaction.get(fabricRef);
-                if (!fabricDoc.exists() || fabricDoc.data().length < data.fabricLength) {
+                if (!fabricDoc.exists() || fabricDoc.data().length < fabricLengthToDeduct) {
                      throw new Error("Not enough fabric in stock.");
                 }
             }
@@ -294,8 +308,8 @@ export default function NewOrderPage() {
                 }
             }
             
-            if (fabricRef && fabricDoc && data.fabricLength) {
-                const newLength = fabricDoc.data().length - data.fabricLength;
+            if (fabricRef && fabricDoc && fabricLengthToDeduct) {
+                const newLength = fabricDoc.data().length - fabricLengthToDeduct;
                 transaction.update(fabricRef, { length: newLength });
             }
 
@@ -306,6 +320,7 @@ export default function NewOrderPage() {
                 customerId,
                 customerName,
                 ...data,
+                sellingPrice: finalTotalBill, // Save the final calculated total
                 status: "In Progress",
                 createdAt: new Date(),
             };
@@ -324,9 +339,9 @@ export default function NewOrderPage() {
                 invoiceNumber: newInvoiceNumber,
                 customerName: customerName,
                 deliveryDate: data.deliveryDate,
-                total: data.sellingPrice,
+                total: finalTotalBill,
                 paid: data.advance || 0,
-                balance: data.sellingPrice - (data.advance || 0),
+                balance: finalTotalBill - (data.advance || 0),
                 items: getOrderItems(data),
                 measurements: data.measurements,
                 imageUrl: data.readymadeItemImageUrl,
@@ -365,7 +380,11 @@ export default function NewOrderPage() {
       const selectedFabric = fabricStock.find(f => f.id === data.fabricId)
       switch(data.orderType) {
         case 'stitching':
-            return data.stitchingService || 'Stitching Service';
+            const baseService = data.stitchingService || 'Stitching Service';
+            if (data.fabricId && data.stitchingFabricLength) {
+                return `${baseService} + ${selectedFabric?.type} (${data.stitchingFabricLength} mtrs)`;
+            }
+            return baseService;
         case 'readymade':
             return `${data.readymadeItemName} (Size: ${data.readymadeSize})` || 'Ready-made Item';
         case 'fabric':
@@ -532,7 +551,7 @@ export default function NewOrderPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <FormField control={form.control} name="deliveryDate" render={({ field }) => (<FormItem><FormLabel>Delivery Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)}/>
-                   <FormField control={form.control} name="orderType" render={({ field }) => (<FormItem><FormLabel>Order Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select the type of order" /></SelectTrigger></FormControl><SelectContent><SelectItem value="stitching">Stitching Service</SelectItem><SelectItem value="readymade">Sell Ready-Made Item</SelectItem><SelectItem value="fabric">Sell Fabric Only</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
+                   <FormField control={form.control} name="orderType" render={({ field }) => (<FormItem><FormLabel>Order Type</FormLabel><Select onValueChange={(value) => { field.onChange(value); setValue('sellingPrice', 0); }} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select the type of order" /></SelectTrigger></FormControl><SelectContent><SelectItem value="stitching">Stitching Service</SelectItem><SelectItem value="readymade">Sell Ready-Made Item</SelectItem><SelectItem value="fabric">Sell Fabric Only</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
                 </div>
               </CardContent>
             </Card>
@@ -541,9 +560,17 @@ export default function NewOrderPage() {
                 <>
                 <Card>
                     <CardHeader><CardTitle className="font-headline">Service & Fabric</CardTitle></CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField control={form.control} name="stitchingService" render={({ field }) => (<FormItem><FormLabel>Stitching Service</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stitching service" /></SelectTrigger></FormControl><SelectContent>{Object.keys(serviceCharges).map((service) => (<SelectItem key={service} value={service}>{service}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
-                         <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric (Optional)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select fabric from stock" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField control={form.control} name="stitchingService" render={({ field }) => (<FormItem><FormLabel>Stitching Service</FormLabel><Select onValueChange={(value) => { field.onChange(value); setValue("sellingPrice", serviceCharges[value as keyof typeof serviceCharges] || 0) }} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stitching service" /></SelectTrigger></FormControl><SelectContent>{Object.keys(serviceCharges).map((service) => (<SelectItem key={service} value={service}>{service}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                         <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric (Optional)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select fabric from stock" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type} ({f.length} mtrs left)</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                        </div>
+                        {watchedValues.fabricId && (
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                                <FormField control={form.control} name="stitchingFabricLength" render={({ field }) => (<FormItem><FormLabel>Fabric Length (mtrs)</FormLabel><FormControl><Input type="number" placeholder="Length used" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                                <FormField control={form.control} name="stitchingFabricPrice" render={({ field }) => (<FormItem><FormLabel>Fabric Price</FormLabel><FormControl><Input type="number" placeholder="Price for fabric" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                             </div>
+                        )}
                     </CardContent>
                 </Card>
                 {renderMeasurementFields()}
@@ -624,9 +651,11 @@ export default function NewOrderPage() {
             )}
             
             <Card>
-                <CardHeader><CardTitle>Pricing</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle>{watchedValues.orderType === 'stitching' ? 'Charges' : 'Pricing'}</CardTitle>
+                </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="sellingPrice" render={({ field }) => (<FormItem><FormLabel>Total Selling Price</FormLabel><FormControl><Input type="number" placeholder="Enter final price" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                    <FormField control={form.control} name="sellingPrice" render={({ field }) => (<FormItem><FormLabel>{watchedValues.orderType === 'stitching' ? 'Stitching Charge' : 'Total Selling Price'}</FormLabel><FormControl><Input type="number" placeholder="Enter final price" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                     <FormField control={form.control} name="advance" render={({ field }) => (<FormItem><FormLabel>Advance Paid</FormLabel><FormControl><Input type="number" placeholder="Enter advance amount" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                 </CardContent>
             </Card>
@@ -648,7 +677,17 @@ export default function NewOrderPage() {
                       
                        {watchedValues.orderType === 'stitching' && watchedValues.stitchingService && (
                             <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                                <p className="font-sans font-semibold pb-2">{watchedValues.stitchingService}</p>
+                                <div className="flex justify-between font-sans">
+                                    <span className="font-semibold pb-2">{watchedValues.stitchingService}</span>
+                                    <span>{formatCurrency(watchedValues.sellingPrice || 0)}</span>
+                                </div>
+                                {watchedValues.fabricId && watchedValues.stitchingFabricLength && (
+                                    <div className="flex justify-between font-sans text-xs pt-1">
+                                        <span>+ {fabricStock.find(f => f.id === watchedValues.fabricId)?.type} ({watchedValues.stitchingFabricLength} m)</span>
+                                        <span>{formatCurrency(watchedValues.stitchingFabricPrice || 0)}</span>
+                                    </div>
+                                )}
+                                {watchedValues.measurements && Object.values(watchedValues.measurements).some(v => v) && <Separator className="my-2"/>}
                                 {watchedValues.measurements && Object.entries(watchedValues.measurements).map(([key, value]) => value && (
                                    <div key={key} className="flex justify-between text-xs">
                                        <span className="capitalize text-muted-foreground">{key.replace(/([A-Z])/g, ' $1')}:</span>
@@ -675,9 +714,9 @@ export default function NewOrderPage() {
 
                        <Separator/>
                       <div className="space-y-2">
-                        <div className="flex justify-between font-bold"><span>Total Bill:</span> <span>{formatCurrency(watchedValues.sellingPrice || 0)}</span></div>
+                        <div className="flex justify-between font-bold"><span>Total Bill:</span> <span>{formatCurrency(totalBill)}</span></div>
                          <div className="flex justify-between"><span>Advance:</span> <span>{formatCurrency(watchedValues.advance || 0)}</span></div>
-                        <div className="flex justify-between text-destructive font-bold"><span>Balance:</span> <span>{formatCurrency((watchedValues.sellingPrice || 0) - (watchedValues.advance || 0))}</span></div>
+                        <div className="flex justify-between text-destructive font-bold"><span>Balance:</span> <span>{formatCurrency(totalBill - (watchedValues.advance || 0))}</span></div>
                       </div>
                       <Button type="submit" className="w-full" disabled={isSubmitting}>
                         {isSubmitting ? <Loader2 className="animate-spin" /> : "Save & Generate Receipt"}
@@ -736,7 +775,3 @@ export default function NewOrderPage() {
     </div>
   );
 }
-
-    
-
-    

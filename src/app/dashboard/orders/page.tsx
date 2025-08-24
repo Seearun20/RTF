@@ -62,6 +62,7 @@ import { InvoicePrintWrapper } from "@/components/dashboard/invoice";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, DocumentData, QueryDocumentSnapshot, query, orderBy } from "firebase/firestore";
 import { MeasurementSlip } from "@/components/dashboard/measurement-slip";
+import { FabricStock } from "../stock/fabric/page";
 
 // Re-defining the Order interface here based on what's stored in Firestore
 export interface Order {
@@ -75,6 +76,7 @@ export interface Order {
     status: "In Progress" | "Ready" | "Delivered";
     orderType: "stitching" | "readymade" | "fabric";
     stitchingService?: string;
+    stitchingFabricLength?: number;
     readymadeItemName?: string;
     readymadeSize?: string;
     readymadeItemImageUrl?: string;
@@ -84,14 +86,19 @@ export interface Order {
     createdAt: any; // Using any for Firestore Timestamp for simplicity
 }
 
-function getOrderItems(order: Order) {
+function getOrderItems(order: Order, fabricStock: FabricStock[]) {
+    const selectedFabric = fabricStock.find(f => f.id === order.fabricId);
     switch (order.orderType) {
         case 'stitching':
-            return order.stitchingService || 'Stitching Service';
+            const baseService = order.stitchingService || 'Stitching Service';
+            if (order.fabricId && order.stitchingFabricLength) {
+                return `${baseService} + ${selectedFabric?.type} (${order.stitchingFabricLength} mtrs)`;
+            }
+            return baseService;
         case 'readymade':
             return `${order.readymadeItemName} (Size: ${order.readymadeSize})` || 'Ready-made Item';
         case 'fabric':
-            return `Fabric Sale (${order.fabricLength} mtrs)`;
+             return `${selectedFabric?.type} (${order.fabricLength} mtrs)` || 'Fabric';
         default:
             return 'N/A';
     }
@@ -147,6 +154,7 @@ function UpdateStatusDialog({ order, setOpen }: { order: Order; setOpen: (open: 
 export default function OrdersPage() {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [fabricStock, setFabricStock] = useState<FabricStock[]>([]);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [dialogs, setDialogs] = useState({
       invoice: false,
@@ -161,7 +169,15 @@ export default function OrdersPage() {
         const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<Order, 'id'>) }));
         setOrders(ordersData);
     });
-    return () => unsubscribe();
+
+    const unsubFabric = onSnapshot(collection(db, "fabricStock"), (snapshot) => {
+      setFabricStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FabricStock)));
+    });
+
+    return () => {
+        unsubscribe();
+        unsubFabric();
+    };
   }, []);
 
 
@@ -209,7 +225,7 @@ export default function OrdersPage() {
         paid: order.advance || 0,
         balance: balance,
         status: order.status,
-        items: getOrderItems(order),
+        items: getOrderItems(order, fabricStock),
         measurements: order.measurements,
         imageUrl: order.readymadeItemImageUrl,
       }
@@ -259,7 +275,7 @@ export default function OrdersPage() {
                     <TableCell className="font-medium">{order.invoiceNumber}</TableCell>
                     <TableCell>{order.customerName}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                        {getOrderItems(order)}
+                        {getOrderItems(order, fabricStock)}
                     </TableCell>
                     <TableCell>{formatCurrency(order.sellingPrice)}</TableCell>
                     <TableCell
