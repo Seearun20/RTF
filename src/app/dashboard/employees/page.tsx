@@ -62,7 +62,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Label } from "@/components/ui/label";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
 import { Textarea } from "@/components/ui/textarea";
@@ -477,5 +476,4 @@ export default function EmployeesPage() {
 
         </div>
     );
-
-    
+}
