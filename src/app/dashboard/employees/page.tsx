@@ -26,7 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { employees as mockEmployees, type Employee } from "@/lib/data";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -49,7 +48,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -64,11 +63,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
+
+export interface Employee {
+    id: string;
+    name: string;
+    role: string;
+    salary: number;
+    balance: number;
+    leaves: number;
+}
 
 const employeeSchema = z.object({
     name: z.string().min(1, "Employee name is required"),
     role: z.string().min(1, "Role is required"),
-    salary: z.coerce.number().min(1, "Salary must be greater than 0"),
+    salary: z.coerce.number().min(0, "Salary must be a positive number"),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -76,9 +86,7 @@ type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void; employee?: Employee | null }) {
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const isEditMode = !!employee;
-    const [employees, setEmployees] = useState(mockEmployees);
 
     const form = useForm<EmployeeFormValues>({
         resolver: zodResolver(employeeSchema),
@@ -89,23 +97,34 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
         },
     });
 
-    const onSubmit = (values: EmployeeFormValues) => {
-        setIsSubmitting(true);
-        // Simulate API call
-        setTimeout(() => {
+    const { formState: { isSubmitting } } = form;
+
+    const onSubmit = async (values: EmployeeFormValues) => {
+        try {
             if (isEditMode && employee) {
-                setEmployees(employees.map(e => e.id === employee.id ? {...e, ...values} : e));
+                const employeeDoc = doc(db, "employees", employee.id);
+                await updateDoc(employeeDoc, values);
+                toast({
+                    title: "Employee Updated!",
+                    description: `Successfully updated ${values.name}.`,
+                });
             } else {
-                const newEmployee = { ...values, id: `EMP${employees.length + 1}`, balance: 0, leaves: 0 };
-                setEmployees([...employees, newEmployee]);
+                const newEmployeeData = { ...values, balance: 0, leaves: 0 };
+                await addDoc(collection(db, "employees"), newEmployeeData);
+                toast({
+                    title: "Employee Added!",
+                    description: `Successfully added ${values.name}.`,
+                });
             }
-            toast({
-                title: isEditMode ? "Employee Updated!" : "Employee Added!",
-                description: `Successfully ${isEditMode ? 'updated' : 'added'} ${values.name}.`,
-            });
-            setIsSubmitting(false);
             setOpen(false);
-        }, 1000);
+            form.reset();
+        } catch (error) {
+             toast({
+                variant: "destructive",
+                title: "Error",
+                description: "There was an error saving the employee details.",
+            });
+        }
     };
 
     return (
@@ -147,6 +166,7 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
                     />
                 </div>
                 <DialogFooter>
+                    <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
                     <Button type="submit" disabled={isSubmitting}>
                         {isSubmitting ? <Loader2 className="animate-spin" /> : (isEditMode ? "Save Changes" : "Add Employee")}
                     </Button>
@@ -158,7 +178,7 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
 
 export default function EmployeesPage() {
     const { toast } = useToast();
-    const [employees, setEmployees] = useState(mockEmployees);
+    const [employees, setEmployees] = useState<Employee[]>([]);
     const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
     const [dialogs, setDialogs] = useState({
         add: false,
@@ -168,6 +188,14 @@ export default function EmployeesPage() {
         leaves: false,
     });
     
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, "employees"), (snapshot) => {
+            const employeesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee));
+            setEmployees(employeesData);
+        });
+        return () => unsubscribe();
+    }, []);
+
     const handleActionClick = (employee: Employee, dialog: keyof typeof dialogs) => {
         setCurrentEmployee(employee);
         setDialogs(prev => ({ ...prev, [dialog]: true }));
@@ -180,38 +208,55 @@ export default function EmployeesPage() {
         }).format(amount);
     };
     
-    const handlePaySalary = () => {
+    const handlePaySalary = async () => {
         if(!currentEmployee) return;
-        setEmployees(employees.map(e => e.id === currentEmployee.id ? {...e, balance: 0} : e));
-         toast({
-            title: "Salary Paid!",
-            description: `Salary paid to ${currentEmployee.name}. Balance is now zero.`,
-        });
-        setDialogs(p => ({...p, pay: false}));
+        try {
+            const employeeDoc = doc(db, "employees", currentEmployee.id);
+            await updateDoc(employeeDoc, { balance: 0 });
+            toast({
+                title: "Salary Paid!",
+                description: `Salary paid to ${currentEmployee.name}. Balance is now zero.`,
+            });
+            setDialogs(p => ({...p, pay: false}));
+        } catch (error) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to pay salary." });
+        }
     }
 
-    const handleUpdateLeaves = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleUpdateLeaves = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (!currentEmployee) return;
         const form = event.currentTarget;
         const newLeaves = (form.elements.namedItem('leaves') as HTMLInputElement).value;
-        setEmployees(employees.map(e => e.id === currentEmployee.id ? {...e, leaves: parseInt(newLeaves) } : e));
-         toast({
-            title: "Leaves Updated",
-            description: `Leave balance updated for ${currentEmployee.name}.`,
-        });
-        console.log(`Updating leaves for ${currentEmployee.name} to ${newLeaves}`);
-        setDialogs(p => ({...p, leaves: false}));
+        try {
+            const employeeDoc = doc(db, "employees", currentEmployee.id);
+            await updateDoc(employeeDoc, { leaves: parseInt(newLeaves) });
+            toast({
+                title: "Leaves Updated",
+                description: `Leave balance updated for ${currentEmployee.name}.`,
+            });
+            setDialogs(p => ({...p, leaves: false}));
+        } catch (error) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to update leaves." });
+        }
     }
 
-    const handleRemoveEmployee = () => {
+    const handleRemoveEmployee = async () => {
         if (!currentEmployee) return;
-        setEmployees(employees.filter(e => e.id !== currentEmployee.id));
-        toast({
-            variant: "destructive",
-            title: "Employee Removed",
-            description: `${currentEmployee.name} has been removed from your records.`
-        });
+        try {
+            await deleteDoc(doc(db, "employees", currentEmployee.id));
+            toast({
+                variant: "destructive",
+                title: "Employee Removed",
+                description: `${currentEmployee.name} has been removed from your records.`
+            });
+        } catch (error) {
+             toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to remove employee."
+            });
+        }
     }
 
     return (
@@ -219,7 +264,7 @@ export default function EmployeesPage() {
             <PageHeader title="Employees" subtitle="Manage your staff, salaries, and leaves.">
                 <Dialog open={dialogs.add} onOpenChange={(open) => setDialogs(p => ({ ...p, add: open }))}>
                     <DialogTrigger asChild>
-                        <Button>
+                        <Button onClick={() => setCurrentEmployee(null)}>
                             <PlusCircle className="mr-2 h-4 w-4" /> Add Employee
                         </Button>
                     </DialogTrigger>
@@ -363,3 +408,5 @@ export default function EmployeesPage() {
         </div>
     );
 }
+
+    
