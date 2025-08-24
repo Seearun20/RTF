@@ -38,7 +38,7 @@ import { Customer } from "@/app/dashboard/customers/page";
 import { ReadyMadeStock } from "@/app/dashboard/stock/readymade/page";
 import { FabricStock } from "@/app/dashboard/stock/fabric/page";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, addDoc, doc, getDoc, runTransaction } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, getDoc, runTransaction, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2, Receipt, FileText } from "lucide-react";
 import {
@@ -154,9 +154,24 @@ export default function NewOrderPage() {
         unsubFabric();
     };
   }, []);
+  
+  const dynamicOrderSchema = useMemo(() => {
+    return orderSchema.refine(data => {
+        if (data.orderType !== 'fabric' || !data.fabricId || !data.fabricLength) {
+            return true;
+        }
+        const selectedFabric = fabricStock.find(f => f.id === data.fabricId);
+        if (!selectedFabric) return false;
+        return data.fabricLength <= selectedFabric.length;
+    }, {
+        message: "Cannot sell more fabric than is available in stock.",
+        path: ['fabricLength'],
+    })
+  }, [fabricStock]);
+
 
   const form = useForm<OrderFormValues>({
-    resolver: zodResolver(orderSchema),
+    resolver: zodResolver(dynamicOrderSchema),
     defaultValues: {
       customerType: 'existing',
       customerId: "",
@@ -234,6 +249,16 @@ export default function NewOrderPage() {
               }
             }
 
+            let fabricRef;
+            let fabricDoc;
+            if (data.orderType === 'fabric' && data.fabricId && data.fabricLength) {
+                fabricRef = doc(db, 'fabricStock', data.fabricId);
+                fabricDoc = await transaction.get(fabricRef);
+                if (!fabricDoc.exists() || fabricDoc.data().length < data.fabricLength) {
+                     throw new Error("Not enough fabric in stock.");
+                }
+            }
+
             // --- ALL WRITES GO AFTER READS ---
             let newInvoiceNumber = 1;
             if (invoiceCounterDoc.exists()) {
@@ -268,6 +293,12 @@ export default function NewOrderPage() {
                     transaction.delete(itemRef);
                 }
             }
+            
+            if (fabricRef && fabricDoc && data.fabricLength) {
+                const newLength = fabricDoc.data().length - data.fabricLength;
+                transaction.update(fabricRef, { length: newLength });
+            }
+
 
             const orderData = {
                 orderId,
@@ -331,13 +362,14 @@ export default function NewOrderPage() {
   };
   
   const getOrderItems = (data: OrderFormValues) => {
+      const selectedFabric = fabricStock.find(f => f.id === data.fabricId)
       switch(data.orderType) {
         case 'stitching':
             return data.stitchingService || 'Stitching Service';
         case 'readymade':
             return `${data.readymadeItemName} (Size: ${data.readymadeSize})` || 'Ready-made Item';
         case 'fabric':
-            return fabricStock.find(f => f.id === data.fabricId)?.type || 'Fabric';
+            return `${selectedFabric?.type} (${data.fabricLength} mtrs)` || 'Fabric';
         default:
             return 'N/A';
       }
@@ -585,7 +617,7 @@ export default function NewOrderPage() {
                 <Card>
                     <CardHeader><CardTitle className="font-headline">Fabric Sale Details</CardTitle></CardHeader>
                      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a fabric" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                        <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a fabric" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type} ({f.length} mtrs left)</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
                         <FormField control={form.control} name="fabricLength" render={({ field }) => (<FormItem><FormLabel>Length (mtrs)</FormLabel><FormControl><Input type="number" placeholder="Enter length" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                     </CardContent>
                 </Card>
@@ -704,5 +736,7 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    
 
     

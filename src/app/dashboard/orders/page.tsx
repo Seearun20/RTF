@@ -79,6 +79,7 @@ export interface Order {
     readymadeSize?: string;
     readymadeItemImageUrl?: string;
     fabricId?: string;
+    fabricLength?: number;
     measurements?: { [key: string]: string | undefined };
     createdAt: any; // Using any for Firestore Timestamp for simplicity
 }
@@ -90,7 +91,7 @@ function getOrderItems(order: Order) {
         case 'readymade':
             return `${order.readymadeItemName} (Size: ${order.readymadeSize})` || 'Ready-made Item';
         case 'fabric':
-            return `Fabric Sale`; // fabricId might not be enough to get a name here without another fetch
+            return `Fabric Sale (${order.fabricLength} mtrs)`;
         default:
             return 'N/A';
     }
@@ -347,7 +348,17 @@ export default function OrdersPage() {
                <UpdateStatusDialog order={currentOrder} setOpen={(open) => setDialogs(p => ({...p, status: open}))} />
             </Dialog>
             <Dialog open={dialogs.receipt} onOpenChange={(open) => setDialogs(p => ({...p, receipt: open}))}>
-                 {invoiceData && <MeasurementSlip order={invoiceData}/>}
+                 {invoiceData && 
+                    <DialogContent className="sm:max-w-sm">
+                        <DialogHeader>
+                            <DialogTitle>Measurement Slip</DialogTitle>
+                            <DialogDescription>
+                                A printable slip with customer measurements for the tailor.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <MeasurementSlip order={invoiceData}/>
+                    </DialogContent>
+                 }
             </Dialog>
          </>
       )}
@@ -355,7 +366,5 @@ export default function OrdersPage() {
     </div>
   );
 }
-
-    
 
     

@@ -75,7 +75,7 @@ export interface FabricStock {
 
 const fabricSchema = z.object({
   type: z.string().min(1, { message: "Fabric type is required" }),
-  length: z.coerce.number().min(1, { message: "Length must be at least 1" }),
+  length: z.coerce.number().min(0, { message: "Length must be 0 or more" }),
   costPerMtr: z.coerce.number().min(1, { message: "Cost is required" }),
   supplier: z.string().min(1, { message: "Supplier name is required" }),
   supplierPhone: z.string().min(10, { message: "Supplier phone must be at least 10 digits" }),
@@ -126,8 +126,8 @@ function FabricForm({ setOpen, fabricItem }: { setOpen: (open: boolean) => void;
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField control={form.control} name="type" render={({ field }) => (<FormItem><FormLabel>Fabric Type</FormLabel><FormControl><Input placeholder="e.g., Italian Wool" {...field} /></FormControl><FormMessage /></FormItem>)} />
           <FormField control={form.control} name="length" render={({ field }) => (<FormItem><FormLabel>Length (mtrs)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+          </div>
           <FormField control={form.control} name="costPerMtr" render={({ field }) => (<FormItem><FormLabel>Cost per Meter</FormLabel><FormControl><Input type="number" placeholder="Cost per meter" {...field} /></FormControl><FormMessage /></FormItem>)} />
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={form.control} name="supplier" render={({ field }) => (<FormItem><FormLabel>Supplier</FormLabel><FormControl><Input placeholder="e.g., Fabric Mart" {...field} /></FormControl><FormMessage /></FormItem>)}/>
             <FormField control={form.control} name="supplierPhone" render={({ field }) => (<FormItem><FormLabel>Supplier Phone</FormLabel><FormControl><Input placeholder="e.g., 9876543210" {...field} /></FormControl><FormMessage /></FormItem>)}/>
@@ -294,3 +294,5 @@ export default function FabricStockPage() {
     </div>
   );
 }
+
+    
