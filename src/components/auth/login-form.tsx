@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot } from "firebase/firestore";
+import { sendOtp } from "@/ai/flows/send-otp-flow";
 
 interface Signatory {
     id: string;
@@ -55,7 +56,7 @@ const OTPSchema = z.object({
   otp: z.string().min(6, { message: "Your OTP must be 6 characters." }),
 });
 
-function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; }) {
+function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string, otp: string) => void; }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [signatories, setSignatories] = useState<Signatory[]>([]);
   const { toast } = useToast();
@@ -88,17 +89,33 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; 
   }, [watchedRole, form, signatories]);
 
 
-  const handleSubmit = (values: z.infer<typeof LoginSchema>) => {
+  const handleSubmit = async (values: z.infer<typeof LoginSchema>) => {
     setIsSubmitting(true);
-    // Simulate API call to send OTP
-    setTimeout(() => {
-      toast({
-        title: "OTP Sent!",
-        description: `An OTP has been sent to ${values.email}. (Hint: Use 123456)`,
-      });
-      setIsSubmitting(false);
-      onEmailSubmit(values.email);
-    }, 1000);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    try {
+      const result = await sendOtp({ email: values.email, otp });
+      if (result.success) {
+        toast({
+          title: "OTP Sent!",
+          description: `An OTP has been sent to ${values.email}.`,
+        });
+        onEmailSubmit(values.email, otp);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Failed to Send OTP",
+          description: result.message,
+        });
+      }
+    } catch (error) {
+       toast({
+          variant: "destructive",
+          title: "Error",
+          description: "An unexpected error occurred while sending the OTP.",
+        });
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -154,7 +171,7 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; 
   );
 }
 
-function OtpStep({ onBack }: { onBack: () => void; }) {
+function OtpStep({ sentOtp, onBack }: { sentOtp: string, onBack: () => void; }) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -171,8 +188,9 @@ function OtpStep({ onBack }: { onBack: () => void; }) {
 
   const handleSubmit = (values: z.infer<typeof OTPSchema>) => {
     setIsSubmitting(true);
+    // Simulate a short delay for UX
     setTimeout(() => {
-      if (values.otp === "123456") {
+      if (values.otp === sentOtp) {
         toast({
           title: "Success!",
           description: "You have been logged in successfully.",
@@ -191,7 +209,7 @@ function OtpStep({ onBack }: { onBack: () => void; }) {
         });
         setIsSubmitting(false);
       }
-    }, 1000);
+    }, 500);
   };
 
   return (
@@ -204,7 +222,7 @@ function OtpStep({ onBack }: { onBack: () => void; }) {
             <FormItem>
               <FormLabel>Enter OTP</FormLabel>
               <FormControl>
-                <Input placeholder="123456" {...field} />
+                <Input placeholder="Enter the 6-digit code" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -223,18 +241,21 @@ function OtpStep({ onBack }: { onBack: () => void; }) {
 
 export function LoginForm() {
   const [step, setStep] = useState<"email" | "otp">("email");
+  const [sentOtp, setSentOtp] = useState("");
 
-  const handleEmailSubmit = (email: string) => {
+  const handleEmailSubmit = (email: string, otp: string) => {
+    setSentOtp(otp);
     setStep("otp");
   };
 
   const handleBack = () => {
     setStep("email");
+    setSentOtp("");
   };
 
   return step === "email" ? (
     <EmailStep onEmailSubmit={handleEmailSubmit} />
   ) : (
-    <OtpStep onBack={handleBack} />
+    <OtpStep sentOtp={sentOtp} onBack={handleBack} />
   );
 }
