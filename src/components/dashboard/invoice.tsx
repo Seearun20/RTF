@@ -11,7 +11,7 @@ import React from "react";
 interface InvoiceProps {
     order: {
         id: string; 
-        orderId?: string; // Kept for cases where it might still be passed
+        orderId?: string;
         invoiceNumber: number;
         customerName: string;
         deliveryDate: string;
@@ -31,64 +31,84 @@ export const Invoice = React.forwardRef<HTMLDivElement, InvoiceProps>(({ order }
     };
 
     return (
-        <div ref={ref} className="p-8 print:p-0">
-            <Card className="print:shadow-none print:border-none">
-                <CardHeader className="space-y-4">
-                    <div className="flex items-start justify-between">
+        <div ref={ref} className="p-8 print:p-0 bg-background text-foreground">
+            <div className="max-w-4xl mx-auto p-8 rounded-lg shadow-lg bg-card border">
+                <header className="flex justify-between items-center pb-6 border-b">
+                    <div>
+                        <RtfLogo className="w-16 h-16 text-primary" />
+                        <h1 className="text-3xl font-bold font-headline mt-2 text-primary">Raghav Tailors & Fabrics</h1>
+                        <p className="text-muted-foreground">Dineshpur Main Market 263150, U.S.Nagar Uttarakhand, India</p>
+                        <p className="text-muted-foreground">Ph: 8766877348</p>
+                    </div>
+                    <div className="text-right">
+                        <h2 className="text-4xl font-bold font-headline text-muted-foreground tracking-widest uppercase">Invoice</h2>
+                        <p className="text-muted-foreground mt-1"># {order.invoiceNumber}</p>
+                        <p className="mt-1">Date: {new Date().toLocaleDateString()}</p>
+                    </div>
+                </header>
+
+                <section className="mt-8">
+                    <div className="grid grid-cols-2 gap-8">
                         <div>
-                            <RtfLogo className="w-16 h-16 text-primary" />
-                            <h1 className="text-2xl font-bold font-headline mt-2">Raghav Tailors & Fabrics</h1>
-                            <p className="text-muted-foreground text-sm">Dineshpur Main Market 263150, U.S.Nagar Uttarakhand, India</p>
-                             <p className="text-muted-foreground text-sm">Ph: 8766877348</p>
+                            <h3 className="font-semibold text-muted-foreground mb-2">Bill To:</h3>
+                            <p className="font-bold text-lg">{order.customerName}</p>
                         </div>
                         <div className="text-right">
-                            <h2 className="text-3xl font-bold text-primary font-headline">Invoice</h2>
-                            <p className="text-muted-foreground">#{order.invoiceNumber}</p>
-                            <p>Date: {new Date().toLocaleDateString()}</p>
+                            <h3 className="font-semibold text-muted-foreground mb-2">Delivery Date:</h3>
+                            <p className="font-bold text-lg">{order.deliveryDate}</p>
                         </div>
                     </div>
-                     <Separator />
-                    <div>
-                        <h3 className="font-semibold">Bill To:</h3>
-                        <p>{order.customerName}</p>
+                </section>
+
+                <section className="mt-8">
+                    <div className="w-full overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="bg-muted text-left text-muted-foreground uppercase text-sm">
+                                    <th className="p-3 font-semibold">Item Description</th>
+                                    <th className="p-3 text-right font-semibold">Rate</th>
+                                    <th className="p-3 text-right font-semibold">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="border-b">
+                                    <td className="p-3">{order.items}</td>
+                                    <td className="p-3 text-right">{formatCurrency(order.total)}</td>
+                                    <td className="p-3 text-right">{formatCurrency(order.total)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-4 font-semibold py-2 bg-muted rounded-t-lg">
-                        <div className="col-span-2 p-2">Item Description</div>
-                        <div className="p-2 text-right">Rate</div>
-                        <div className="p-2 text-right">Amount</div>
+                </section>
+
+                <section className="mt-8 flex justify-end">
+                    <div className="w-full max-w-xs space-y-4">
+                        <div className="flex justify-between font-medium">
+                            <span>Subtotal</span>
+                            <span>{formatCurrency(order.total)}</span>
+                        </div>
+                        <div className="flex justify-between font-medium">
+                            <span>Advance Paid</span>
+                            <span>{formatCurrency(order.paid)}</span>
+                        </div>
+                        <Separator/>
+                        <div className="flex justify-between font-bold text-lg text-primary">
+                            <span>Balance Due</span>
+                            <span>{formatCurrency(order.balance)}</span>
+                        </div>
                     </div>
-                     <div className="grid grid-cols-4 border-b">
-                        <div className="col-span-2 p-2">{order.items}</div>
-                        <div className="p-2 text-right">{formatCurrency(order.total)}</div>
-                        <div className="p-2 text-right">{formatCurrency(order.total)}</div>
-                    </div>
-                    <div className="grid grid-cols-4 mt-4">
-                        <div className="col-span-3 text-right font-semibold p-2">Subtotal</div>
-                        <div className="text-right p-2">{formatCurrency(order.total)}</div>
-                    </div>
-                     <div className="grid grid-cols-4">
-                        <div className="col-span-3 text-right font-semibold p-2">Advance Paid</div>
-                        <div className="text-right p-2">{formatCurrency(order.paid)}</div>
-                    </div>
-                     <Separator />
-                      <div className="grid grid-cols-4">
-                        <div className="col-span-3 text-right font-bold p-2 text-lg">Balance Due</div>
-                        <div className="text-right p-2 font-bold text-lg">{formatCurrency(order.balance)}</div>
-                    </div>
-                </CardContent>
-                <CardFooter className="flex-col items-start gap-4 p-8 pt-0 print:p-8">
-                     <div className="text-sm text-muted-foreground">
-                        <p className="font-semibold">Terms & Conditions</p>
-                        <ul className="list-disc list-inside">
-                            <li>Goods once sold will not be taken back.</li>
-                            <li>Delivery by: {order.deliveryDate}</li>
-                            <li>Alterations will be charged extra.</li>
-                        </ul>
-                    </div>
-                </CardFooter>
-            </Card>
+                </section>
+
+                <footer className="mt-12 pt-6 border-t">
+                    <h3 className="font-semibold text-muted-foreground mb-2">Terms & Conditions</h3>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-1">
+                        <li>Goods once sold will not be taken back.</li>
+                        <li>Delivery by: {order.deliveryDate}</li>
+                        <li>Alterations will be charged extra.</li>
+                        <li>Please bring this invoice at the time of delivery.</li>
+                    </ul>
+                </footer>
+            </div>
         </div>
     )
 });
@@ -98,10 +118,9 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
     const componentRef = React.useRef(null);
     
     const handlePrint = async () => {
-        const printContent = (componentRef.current as HTMLDivElement | null)?.innerHTML;
-        if (printContent) {
+        const printContentNode = componentRef.current;
+        if (printContentNode) {
             try {
-                // Fetch the content of globals.css
                 const cssResponse = await fetch('/globals.css');
                 const cssText = await cssResponse.text();
 
@@ -110,39 +129,45 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
                     alert('Please allow popups for this website');
                     return;
                 }
-                
-                printWindow.document.write(`
+
+                const printDocument = printWindow.document;
+                printDocument.write(`
                     <html>
                         <head>
                             <title>Print Invoice #${order.invoiceNumber}</title>
                             <style>
                                 ${cssText}
                                 @media print {
-                                    body { -webkit-print-color-adjust: exact; padding: 1rem; }
-                                    .print\\:p-0 { padding: 0 !important; }
-                                    .print\\:shadow-none { box-shadow: none !important; }
-                                    .print\\:border-none { border: none !important; }
+                                  body {
+                                    -webkit-print-color-adjust: exact;
+                                  }
+                                  .print\\:p-0 { padding: 0 !important; }
+                                  .print\\:shadow-none { box-shadow: none !important; }
+                                  .print\\:border-none { border: none !important; }
                                 }
                             </style>
                         </head>
-                        <body>${printContent}</body>
+                        <body>
+                            <div id="print-content"></div>
+                        </body>
                     </html>
                 `);
 
+                const printContentDiv = printDocument.getElementById('print-content');
+                if(printContentDiv) {
+                  printContentDiv.innerHTML = (printContentNode as HTMLDivElement).innerHTML;
+                }
+                
                 setTimeout(() => {
-                    printWindow.document.close();
+                    printDocument.close();
                     printWindow.focus();
                     printWindow.print();
                     printWindow.close();
                 }, 250);
 
             } catch (error) {
-                console.error("Failed to fetch styles for printing:", error);
-                // Fallback for printing without styles if CSS fetch fails
-                const printWindow = window.open('', '_blank');
-                printWindow?.document.write(printContent);
-                printWindow?.document.close();
-                printWindow?.print();
+                console.error("Failed to prepare for printing:", error);
+                alert("Could not prepare document for printing.");
             }
         }
     };
