@@ -71,6 +71,7 @@ export interface FabricStock {
     costPerMtr: number;
     supplier: string;
     supplierPhone: string;
+    createdAt?: any;
 }
 
 const fabricSchema = z.object({
@@ -105,7 +106,7 @@ function FabricForm({ setOpen, fabricItem }: { setOpen: (open: boolean) => void;
         await updateDoc(doc(db, "fabricStock", fabricItem.id), values);
         toast({ title: "Fabric Updated!", description: `Successfully updated ${values.type}.` });
       } else {
-        await addDoc(collection(db, "fabricStock"), values);
+        await addDoc(collection(db, "fabricStock"), { ...values, createdAt: new Date() });
         toast({ title: "Fabric Added!", description: `Successfully added ${values.length} meters of ${values.type}.` });
       }
       setOpen(false);
@@ -294,5 +295,3 @@ export default function FabricStockPage() {
     </div>
   );
 }
-
-    

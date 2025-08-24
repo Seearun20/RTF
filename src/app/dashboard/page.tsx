@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, ShoppingBag, TrendingUp, UserPlus, Package, Scissors } from "lucide-react";
+import { DollarSign, ShoppingBag, TrendingUp, UserPlus, Package, Scissors, TrendingDown } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { useState, useEffect } from "react";
@@ -41,6 +41,8 @@ export default function DashboardPage() {
         totalPurchases: 0,
         totalProfit: 0,
         newOrdersThisMonth: 0,
+        purchasesThisMonth: 0,
+        profitThisMonth: 0,
     });
     const [salesData, setSalesData] = useState<any[]>([]);
 
@@ -68,28 +70,59 @@ export default function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        // Calculate financials
+        // --- Overall Financials ---
         const totalSales = orders.reduce((sum, order) => sum + Number(order.sellingPrice || 0), 0);
         
+        // This calculates the total value of all stock items ever created, which represents total purchases.
+        // It's assumed that when a stock item is added, its full cost is recorded.
         const readyMadePurchases = readyMadeStock.reduce((sum, item) => sum + (Number(item.cost || 0) * Number(item.quantity || 0)), 0);
         const fabricPurchases = fabricStock.reduce((sum, item) => sum + (Number(item.costPerMtr || 0) * Number(item.length || 0)), 0);
         const totalPurchases = readyMadePurchases + fabricPurchases;
         
         const totalProfit = totalSales - totalPurchases;
 
+        // --- Monthly Financials ---
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
-        const newOrdersThisMonth = orders.filter(order => {
-            if (!order.createdAt || typeof order.createdAt.toDate !== 'function') {
-                return false;
-            }
+
+        const ordersThisMonth = orders.filter(order => {
+            if (!order.createdAt || typeof order.createdAt.toDate !== 'function') return false;
             const orderDate = order.createdAt.toDate();
             return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
-        }).length;
+        });
 
-        setFinancials({ totalSales, totalPurchases, totalProfit, newOrdersThisMonth });
+        const newOrdersThisMonth = ordersThisMonth.length;
+        const salesThisMonth = ordersThisMonth.reduce((sum, order) => sum + Number(order.sellingPrice || 0), 0);
 
-        // Aggregate sales data for chart
+        // For monthly purchases, we assume new stock items have a "createdAt" field.
+        // If not, this will only calculate purchases for items with that field.
+        // A more robust system would have a dedicated 'purchases' collection.
+        const readyMadePurchasesThisMonth = readyMadeStock
+            .filter(item => {
+                // @ts-ignore
+                if (!item.createdAt || typeof item.createdAt.toDate !== 'function') return false;
+                 // @ts-ignore
+                const itemDate = item.createdAt.toDate();
+                return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+            })
+            .reduce((sum, item) => sum + (Number(item.cost || 0) * Number(item.quantity || 0)), 0);
+
+        const fabricPurchasesThisMonth = fabricStock
+            .filter(item => {
+                 // @ts-ignore
+                if (!item.createdAt || typeof item.createdAt.toDate !== 'function') return false;
+                 // @ts-ignore
+                const itemDate = item.createdAt.toDate();
+                return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+            })
+            .reduce((sum, item) => sum + (Number(item.costPerMtr || 0) * Number(item.length || 0)), 0);
+
+        const purchasesThisMonth = readyMadePurchasesThisMonth + fabricPurchasesThisMonth;
+        const profitThisMonth = salesThisMonth - purchasesThisMonth;
+
+        setFinancials({ totalSales, totalPurchases, totalProfit, newOrdersThisMonth, purchasesThisMonth, profitThisMonth });
+
+        // --- Chart Data ---
         const monthlySales: { [key: string]: number } = {};
         orders.forEach(order => {
              if (!order.createdAt || typeof order.createdAt.toDate !== 'function') {
@@ -121,8 +154,8 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <PageHeader title="Dashboard" subtitle="Welcome back, Raghav!" />
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="shadow-lg">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <Card className="shadow-lg xl:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground text-accent" />
@@ -134,7 +167,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground">Across all orders</p>
                 </CardContent>
             </Card>
-            <Card className="shadow-lg">
+            <Card className="shadow-lg xl:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Purchases</CardTitle>
                 <ShoppingBag className="h-4 w-4 text-muted-foreground text-accent" />
@@ -143,10 +176,10 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold">
                     {formatCurrency(financials.totalPurchases)}
                 </div>
-                <p className="text-xs text-muted-foreground">Total stock cost</p>
+                <p className="text-xs text-muted-foreground">Total historical stock cost</p>
                 </CardContent>
             </Card>
-            <Card className="shadow-lg">
+            <Card className="shadow-lg xl:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
                 <TrendingUp className="h-4 w-4 text-muted-foreground text-accent" />
@@ -165,6 +198,26 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                 <div className="text-2xl font-bold">+{financials.newOrdersThisMonth}</div>
+                <p className="text-xs text-muted-foreground">This month</p>
+                </CardContent>
+            </Card>
+            <Card className="shadow-lg">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Monthly Purchases</CardTitle>
+                <TrendingDown className="h-4 w-4 text-muted-foreground text-accent" />
+                </CardHeader>
+                <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(financials.purchasesThisMonth)}</div>
+                <p className="text-xs text-muted-foreground">This month</p>
+                </CardContent>
+            </Card>
+             <Card className="shadow-lg">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Monthly Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground text-accent" />
+                </CardHeader>
+                <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(financials.profitThisMonth)}</div>
                 <p className="text-xs text-muted-foreground">This month</p>
                 </CardContent>
             </Card>
@@ -241,7 +294,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
-
-    

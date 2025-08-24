@@ -80,6 +80,7 @@ export interface ReadyMadeStock {
     supplier: string;
     supplierPhone: string;
     imageUrl?: string;
+    createdAt?: any;
 }
 
 const addStockSchema = z.object({
@@ -123,9 +124,10 @@ function StockForm({ setOpen, stockItem }: { setOpen: (open: boolean) => void; s
   const isEditMode = !!stockItem;
 
   const onSubmit = async (values: StockFormValues) => {
-    const finalValues = {
+    const finalItemName = values.item === 'Custom' ? values.customItem : values.item;
+    let finalValues: Omit<StockFormValues, 'customItem'> & { item: string; createdAt?: Date } = {
       ...values,
-      item: values.item === 'Custom' ? values.customItem : values.item,
+      item: finalItemName || '',
     };
     delete (finalValues as Partial<StockFormValues>).customItem;
     
@@ -134,6 +136,7 @@ function StockForm({ setOpen, stockItem }: { setOpen: (open: boolean) => void; s
             await updateDoc(doc(db, "readyMadeStock", stockItem.id), finalValues);
             toast({ title: "Stock Updated!", description: `${finalValues.item} has been updated.` });
         } else {
+            finalValues.createdAt = new Date();
             await addDoc(collection(db, "readyMadeStock"), finalValues);
             toast({ title: "Stock Added!", description: `Successfully added ${finalValues.quantity} of ${finalValues.item}.` });
         }
@@ -441,5 +444,3 @@ export default function ReadyMadeStockPage() {
     </div>
   );
 }
-
-    
