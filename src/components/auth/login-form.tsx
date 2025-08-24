@@ -171,7 +171,7 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string, otp: stri
   );
 }
 
-function OtpStep({ sentOtp, onBack }: { sentOtp: string, onBack: () => void; }) {
+function OtpStep({ sentOtp, email, onBack }: { sentOtp: string, email: string, onBack: () => void; }) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -184,6 +184,7 @@ function OtpStep({ sentOtp, onBack }: { sentOtp: string, onBack: () => void; }) 
   const setLoginTimestamp = () => {
       const today = new Date().toISOString().split('T')[0];
       localStorage.setItem('loginDate', today);
+      localStorage.setItem('userEmail', email);
   }
 
   const handleSubmit = (values: z.infer<typeof OTPSchema>) => {
@@ -242,8 +243,10 @@ function OtpStep({ sentOtp, onBack }: { sentOtp: string, onBack: () => void; }) 
 export function LoginForm() {
   const [step, setStep] = useState<"email" | "otp">("email");
   const [sentOtp, setSentOtp] = useState("");
+  const [email, setEmail] = useState("");
 
-  const handleEmailSubmit = (email: string, otp: string) => {
+  const handleEmailSubmit = (submittedEmail: string, otp: string) => {
+    setEmail(submittedEmail);
     setSentOtp(otp);
     setStep("otp");
   };
@@ -251,11 +254,12 @@ export function LoginForm() {
   const handleBack = () => {
     setStep("email");
     setSentOtp("");
+    setEmail("");
   };
 
   return step === "email" ? (
     <EmailStep onEmailSubmit={handleEmailSubmit} />
   ) : (
-    <OtpStep sentOtp={sentOtp} onBack={handleBack} />
+    <OtpStep sentOtp={sentOtp} email={email} onBack={handleBack} />
   );
 }
