@@ -157,10 +157,29 @@ export default function NewOrderPage() {
     resolver: zodResolver(orderSchema),
     defaultValues: {
       customerType: 'existing',
+      customerId: "",
+      newCustomerName: "",
+      newCustomerPhone: "",
+      newCustomerEmail: "",
       orderType: "stitching",
       deliveryDate: "",
       sellingPrice: 0,
       advance: 0,
+      stitchingService: "",
+      readymadeId: "",
+      readymadeSize: "",
+      fabricId: "",
+      fabricLength: 0,
+      measurements: {
+        shirtLength: "",
+        pantLength: "",
+        chest: "",
+        sleeve: "",
+        shoulder: "",
+        waist: "",
+        hip: "",
+        notes: "",
+      }
     },
   });
 
@@ -548,5 +567,3 @@ export default function NewOrderPage() {
     </div>
   );
 }
-
-    
