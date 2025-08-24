@@ -26,19 +26,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
 
-// In a real app, you'd fetch signatories from your database
+interface Signatory {
+    id: string;
+    name: string;
+    email: string;
+}
+
 const PROPRIETOR_EMAIL = "seearun20@gmail.com";
-const MOCK_SIGNATORIES = [
-  { email: "employee1@example.com", name: "Ramesh Kumar" },
-  { email: "employee2@example.com", name: "Suresh Singh" },
-];
 
 const LoginSchema = z.object({
   role: z.string().min(1, "Please select a role."),
   email: z.string().email("Please enter a valid email address."),
 }).refine(data => {
-    if (data.role === 'proprietor' && data.email !== PROPRIETOR_EMAIL) {
+    if (data.role === 'proprietor' && data.email.toLowerCase() !== PROPRIETOR_EMAIL) {
         return false;
     }
     return true;
@@ -54,7 +57,17 @@ const OTPSchema = z.object({
 
 function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signatories, setSignatories] = useState<Signatory[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "signatories"), (snapshot) => {
+        const signatoriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Signatory));
+        setSignatories(signatoriesData);
+    });
+    return () => unsubscribe();
+  }, []);
+
 
   const form = useForm<z.infer<typeof LoginSchema>>({
     resolver: zodResolver(LoginSchema),
@@ -64,12 +77,15 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; 
   const watchedRole = form.watch("role");
 
   useEffect(() => {
+    const selectedSignatory = signatories.find(s => s.email === watchedRole);
     if (watchedRole === "proprietor") {
       form.setValue("email", PROPRIETOR_EMAIL);
+    } else if (selectedSignatory) {
+        form.setValue("email", selectedSignatory.email);
     } else {
         form.setValue("email", "");
     }
-  }, [watchedRole, form]);
+  }, [watchedRole, form, signatories]);
 
 
   const handleSubmit = (values: z.infer<typeof LoginSchema>) => {
@@ -102,8 +118,8 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; 
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="proprietor">Proprietor</SelectItem>
-                  {MOCK_SIGNATORIES.map(s => (
-                     <SelectItem key={s.email} value={s.email}>Signatory: {s.name}</SelectItem>
+                  {signatories.map(s => (
+                     <SelectItem key={s.id} value={s.email}>Signatory: {s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -122,7 +138,7 @@ function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; 
                         <Input 
                             placeholder="Your email address" 
                             {...field} 
-                            disabled={watchedRole === 'proprietor'}
+                            disabled
                         />
                     </FormControl>
                     <FormMessage />

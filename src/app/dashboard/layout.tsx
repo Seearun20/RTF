@@ -11,6 +11,9 @@ import {
   Shirt,
   HandPlatter,
   View,
+  UserPlus,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -33,8 +36,150 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, DocumentData } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
 
+interface Signatory {
+    id: string;
+    name: string;
+    email: string;
+}
+
+const signatorySchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    email: z.string().email("Invalid email address"),
+});
+type SignatoryFormValues = z.infer<typeof signatorySchema>;
+
+
+function SignatoryManager() {
+    const { toast } = useToast();
+    const [signatories, setSignatories] = useState<Signatory[]>([]);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, "signatories"), (snapshot) => {
+            const signatoriesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Signatory));
+            setSignatories(signatoriesData);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const form = useForm<SignatoryFormValues>({
+        resolver: zodResolver(signatorySchema),
+        defaultValues: { name: "", email: "" },
+    });
+
+    const onSubmit = async (values: SignatoryFormValues) => {
+        try {
+            await addDoc(collection(db, "signatories"), values);
+            toast({
+                title: "Signatory Added",
+                description: `${values.name} can now log in.`,
+            });
+            form.reset();
+        } catch (error) {
+            toast({ variant: "destructive", title: "Error", description: "Could not add signatory." });
+        }
+    };
+
+    const handleDelete = async (signatoryId: string) => {
+        try {
+            await deleteDoc(doc(db, "signatories", signatoryId));
+            toast({ variant: "destructive", title: "Signatory Removed" });
+        } catch (error) {
+            toast({ variant: "destructive", title: "Error", description: "Could not remove signatory." });
+        }
+    }
+
+    return (
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                        <User />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DialogTrigger asChild>
+                        <DropdownMenuItem>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            <span>Manage Signatories</span>
+                        </DropdownMenuItem>
+                    </DialogTrigger>
+                    <DropdownMenuItem disabled>
+                         <span>Settings</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Manage Signatories</DialogTitle>
+                    <DialogDescription>
+                        Add or remove users who can sign in to the application.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6">
+                    <div className="space-y-4 max-h-64 overflow-y-auto pr-4">
+                         {signatories.length > 0 ? signatories.map(s => (
+                            <div key={s.id} className="flex items-center justify-between p-2 bg-muted rounded-md">
+                                <div>
+                                    <p className="font-medium">{s.name}</p>
+                                    <p className="text-sm text-muted-foreground">{s.email}</p>
+                                </div>
+                                <Button variant="ghost" size="icon" onClick={() => handleDelete(s.id)}>
+                                    <Trash2 className="h-4 w-4 text-destructive"/>
+                                </Button>
+                            </div>
+                         )) : <p className="text-sm text-center text-muted-foreground py-4">No signatories added yet.</p>}
+                    </div>
+
+                    <Separator/>
+
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                            <p className="font-semibold text-sm">Add New Signatory</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="name" render={({ field }) => (<FormItem><FormLabel>Name</FormLabel><FormControl><Input placeholder="Signatory's name" {...field}/></FormControl><FormMessage/></FormItem>)} />
+                                <FormField control={form.control} name="email" render={({ field }) => (<FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="signatory@email.com" {...field}/></FormControl><FormMessage/></FormItem>)} />
+                            </div>
+                             <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Add Signatory"}
+                            </Button>
+                        </form>
+                    </Form>
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function DashboardLayout({
   children,
@@ -183,9 +328,7 @@ export default function DashboardLayout({
         <header className="flex items-center justify-between p-4 bg-background border-b">
            <SidebarTrigger className="md:hidden"/>
            <div className="flex-1"></div>
-           <Button variant="ghost" size="icon">
-              <User />
-           </Button>
+           <SignatoryManager />
         </header>
         <main className="p-4 sm:p-6 lg:p-8 bg-background">
             {children}
