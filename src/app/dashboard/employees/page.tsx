@@ -26,7 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -64,15 +64,20 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
+import { Textarea } from "@/components/ui/textarea";
 
+export interface Leave {
+    date: string;
+    description: string;
+}
 export interface Employee {
     id: string;
     name: string;
     role: string;
     salary: number;
     balance: number;
-    leaves: number;
+    leaves: Leave[];
 }
 
 const employeeSchema = z.object({
@@ -80,9 +85,13 @@ const employeeSchema = z.object({
     role: z.string().min(1, "Role is required"),
     salary: z.coerce.number().min(0, "Salary must be a positive number"),
 });
-
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
+const addLeaveSchema = z.object({
+    date: z.string().min(1, "Date is required"),
+    description: z.string().optional(),
+});
+type AddLeaveFormValues = z.infer<typeof addLeaveSchema>;
 
 function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void; employee?: Employee | null }) {
     const { toast } = useToast();
@@ -109,7 +118,7 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
                     description: `Successfully updated ${values.name}.`,
                 });
             } else {
-                const newEmployeeData = { ...values, balance: 0, leaves: 0 };
+                const newEmployeeData = { ...values, balance: 0, leaves: [] };
                 await addDoc(collection(db, "employees"), newEmployeeData);
                 toast({
                     title: "Employee Added!",
@@ -176,6 +185,65 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
     );
 }
 
+function AddLeaveForm({ employee, setOpen }: { employee: Employee; setOpen: (open: boolean) => void }) {
+    const { toast } = useToast();
+    const form = useForm<AddLeaveFormValues>({
+        resolver: zodResolver(addLeaveSchema),
+        defaultValues: { date: new Date().toISOString().split("T")[0], description: "" },
+    });
+
+    const onSubmit = async (values: AddLeaveFormValues) => {
+        try {
+            const employeeDoc = doc(db, "employees", employee.id);
+            await updateDoc(employeeDoc, {
+                leaves: arrayUnion({ ...values })
+            });
+            toast({
+                title: "Leave Added",
+                description: `Leave on ${values.date} has been recorded for ${employee.name}.`,
+            });
+            setOpen(false);
+        } catch (error) {
+            toast({ variant: "destructive", title: "Error", description: "Failed to add leave." });
+        }
+    };
+    
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                    control={form.control}
+                    name="date"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Date of Leave</FormLabel>
+                            <FormControl><Input type="date" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Description (Optional)</FormLabel>
+                            <FormControl><Textarea placeholder="Reason for leave..." {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <DialogFooter>
+                    <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                         {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Add Leave"}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </Form>
+    );
+}
+
 export default function EmployeesPage() {
     const { toast } = useToast();
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -186,6 +254,7 @@ export default function EmployeesPage() {
         delete: false,
         pay: false,
         leaves: false,
+        leaveHistory: false,
     });
     
     useEffect(() => {
@@ -220,24 +289,6 @@ export default function EmployeesPage() {
             setDialogs(p => ({...p, pay: false}));
         } catch (error) {
             toast({ variant: "destructive", title: "Error", description: "Failed to pay salary." });
-        }
-    }
-
-    const handleUpdateLeaves = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
-        if (!currentEmployee) return;
-        const form = event.currentTarget;
-        const newLeaves = (form.elements.namedItem('leaves') as HTMLInputElement).value;
-        try {
-            const employeeDoc = doc(db, "employees", currentEmployee.id);
-            await updateDoc(employeeDoc, { leaves: parseInt(newLeaves) });
-            toast({
-                title: "Leaves Updated",
-                description: `Leave balance updated for ${currentEmployee.name}.`,
-            });
-            setDialogs(p => ({...p, leaves: false}));
-        } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to update leaves." });
         }
     }
 
@@ -309,7 +360,7 @@ export default function EmployeesPage() {
                                     </TableCell>
                                     <TableCell>{formatCurrency(employee.salary)}</TableCell>
                                     <TableCell className={employee.balance > 0 ? "text-destructive" : ""}>{formatCurrency(employee.balance)}</TableCell>
-                                    <TableCell>{employee.leaves}</TableCell>
+                                    <TableCell>{employee.leaves?.length || 0}</TableCell>
                                     <TableCell>
                                         <AlertDialog>
                                             <DropdownMenu>
@@ -323,7 +374,9 @@ export default function EmployeesPage() {
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                     <DropdownMenuItem onSelect={() => handleActionClick(employee, 'edit')}>Edit Details</DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => handleActionClick(employee, 'pay')}>Pay Salary</DropdownMenuItem>
-                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'leaves')}>Manage Leaves</DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'leaves')}>Add Leave</DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'leaveHistory')}>View Leave History</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <AlertDialogTrigger asChild>
                                                         <DropdownMenuItem className="text-destructive" onSelect={() => setCurrentEmployee(employee)}>
@@ -387,19 +440,36 @@ export default function EmployeesPage() {
                     <Dialog open={dialogs.leaves} onOpenChange={(open) => setDialogs(p => ({ ...p, leaves: open }))}>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Manage Leaves</DialogTitle>
-                                <DialogDescription>Update the leave balance for {currentEmployee.name}.</DialogDescription>
+                                <DialogTitle>Add Leave</DialogTitle>
+                                <DialogDescription>Record a new leave for {currentEmployee.name}.</DialogDescription>
                             </DialogHeader>
-                            <form onSubmit={handleUpdateLeaves} className="py-4 space-y-4">
-                               <div className="space-y-2">
-                                <Label htmlFor="leaves">Leaves Taken</Label>
-                                <Input id="leaves" name="leaves" type="number" defaultValue={currentEmployee.leaves}/>
-                               </div>
-                                <DialogFooter>
-                                    <Button variant="outline" type="button" onClick={() => setDialogs(p => ({ ...p, leaves: false }))}>Cancel</Button>
-                                    <Button type="submit">Update Leaves</Button>
-                                </DialogFooter>
-                            </form>
+                            <AddLeaveForm employee={currentEmployee} setOpen={(open) => setDialogs(p => ({ ...p, leaves: open }))} />
+                        </DialogContent>
+                    </Dialog>
+                    
+                    <Dialog open={dialogs.leaveHistory} onOpenChange={(open) => setDialogs(p => ({ ...p, leaveHistory: open }))}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Leave History: {currentEmployee.name}</DialogTitle>
+                                <DialogDescription>A record of all leaves taken.</DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4 max-h-96 overflow-y-auto">
+                               {currentEmployee.leaves?.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {currentEmployee.leaves.map((leave, index) => (
+                                            <li key={index} className="flex items-start gap-4 p-3 bg-muted rounded-md">
+                                                <CalendarIcon className="h-5 w-5 mt-1 text-muted-foreground"/>
+                                                <div>
+                                                    <p className="font-semibold">{leave.date}</p>
+                                                    <p className="text-sm text-muted-foreground">{leave.description || "No description"}</p>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                               ) : (
+                                    <p className="text-center text-muted-foreground py-8">No leaves have been recorded for this employee.</p>
+                               )}
+                            </div>
                         </DialogContent>
                     </Dialog>
                 </>
@@ -407,6 +477,5 @@ export default function EmployeesPage() {
 
         </div>
     );
-}
 
     
