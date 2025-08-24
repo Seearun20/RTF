@@ -1,4 +1,6 @@
 
+"use client";
+
 import {
     DialogContent,
     DialogDescription,
@@ -7,17 +9,24 @@ import {
     DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Order } from "@/lib/data";
 import { Printer } from "lucide-react";
 import { StitchSavvyLogo } from "../stitch-savvy-logo";
 import { Separator } from "../ui/separator";
 
+// This interface is now more generic to accept order data from different sources
 interface MeasurementSlipProps {
-    order: Order;
+    order: {
+        id: string;
+        customerName: string;
+        deliveryDate: string;
+        measurements?: {
+            [key: string]: string | undefined;
+        };
+    };
 }
 
 export function MeasurementSlip({ order }: MeasurementSlipProps) {
-    if (!order.measurements || Object.values(order.measurements).every(v => !v)) {
+    if (!order.measurements || Object.values(order.measurements).every(v => !v || v.trim() === '')) {
         return (
              <DialogContent>
                 <DialogHeader>
@@ -32,15 +41,37 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
         const printContent = document.getElementById('measurement-slip-content');
         const originalContents = document.body.innerHTML;
         if(printContent) {
-            document.body.innerHTML = printContent.innerHTML;
-            window.print();
-            document.body.innerHTML = originalContents;
-            window.location.reload();
+            const printableArea = printContent.innerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow?.document.write(`
+                <html>
+                    <head>
+                        <title>Print Slip</title>
+                        <link rel="stylesheet" href="/globals.css">
+                        <style>
+                            @media print {
+                                body { 
+                                    -webkit-print-color-adjust: exact; 
+                                    padding: 1rem;
+                                }
+                            }
+                        </style>
+                    </head>
+                    <body>${printableArea}</body>
+                </html>
+            `);
+            // A delay to ensure stylesheet loads
+            setTimeout(() => {
+                printWindow?.document.close();
+                printWindow?.focus();
+                printWindow?.print();
+                printWindow?.close();
+            }, 250);
         }
     }
 
   return (
-    <DialogContent>
+    <DialogContent className="sm:max-w-md">
         <div id="measurement-slip-content">
             <DialogHeader className="text-left">
                 <div className="flex items-center gap-4">
@@ -64,13 +95,13 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
                     <div className="pt-4">
                         <p className="text-muted-foreground font-sans uppercase text-xs tracking-wider">Notes</p>
                         <Separator className="my-1"/>
-                        <p className="whitespace-pre-wrap">{order.measurements.notes}</p>
+                        <p className="whitespace-pre-wrap font-sans">{order.measurements.notes}</p>
                     </div>
                 )}
             </div>
             <p className="text-xs text-muted-foreground text-center">Delivery Date: {order.deliveryDate}</p>
         </div>
-      <DialogFooter className="mt-4">
+      <DialogFooter className="mt-4 sm:justify-start">
           <Button onClick={handlePrint} className="w-full">
               <Printer className="mr-2"/> Print Slip
           </Button>
@@ -78,6 +109,3 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
     </DialogContent>
   );
 }
-
-
-    

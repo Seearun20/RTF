@@ -1,29 +1,35 @@
 
+"use client";
+
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { StitchSavvyLogo } from "@/components/stitch-savvy-logo";
-import { Order } from "@/lib/data";
 import { Button } from "../ui/button";
 import { Printer } from "lucide-react";
+import React from "react";
 
 interface InvoiceProps {
-    order: Order;
+    order: {
+        id: string;
+        customerName: string;
+        deliveryDate: string;
+        total: number;
+        paid: number;
+        balance: number;
+        items: string;
+    };
 }
 
-export function Invoice({ order }: InvoiceProps) {
+export const Invoice = React.forwardRef<HTMLDivElement, InvoiceProps>(({ order }, ref) => {
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-IN", {
             style: "currency",
             currency: "INR",
         }).format(amount);
     };
-    
-    const handlePrint = () => {
-        window.print();
-    }
 
     return (
-        <div className="p-8 print:p-0">
+        <div ref={ref} className="p-8 print:p-0">
             <Card className="print:shadow-none print:border-none">
                 <CardHeader className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -78,12 +84,51 @@ export function Invoice({ order }: InvoiceProps) {
                             <li>Alterations will be charged extra.</li>
                         </ul>
                     </div>
-                    <Button onClick={handlePrint} className="w-full print:hidden">
-                        <Printer className="mr-2"/>
-                        Print Invoice
-                    </Button>
                 </CardFooter>
             </Card>
+        </div>
+    )
+});
+Invoice.displayName = "Invoice";
+
+export function InvoicePrintWrapper({ order }: InvoiceProps) {
+    const componentRef = React.useRef(null);
+    const handlePrint = () => {
+        const printContent = (componentRef.current as HTMLDivElement | null)?.innerHTML;
+        if (printContent) {
+             const printWindow = window.open('', '_blank');
+             printWindow?.document.write(`
+                <html>
+                    <head>
+                        <title>Print Invoice</title>
+                        <link rel="stylesheet" href="/globals.css">
+                        <style>
+                            @media print {
+                                body { -webkit-print-color-adjust: exact; padding: 1rem; }
+                            }
+                        </style>
+                    </head>
+                    <body>${printContent}</body>
+                </html>
+            `);
+            setTimeout(() => {
+                 printWindow?.document.close();
+                 printWindow?.focus();
+                 printWindow?.print();
+                 printWindow?.close();
+            }, 250);
+        }
+    };
+    
+    return (
+        <div>
+            <Invoice ref={componentRef} order={order} />
+            <div className="p-6 pt-0 print:hidden">
+                 <Button onClick={handlePrint} className="w-full">
+                    <Printer className="mr-2"/>
+                    Print Invoice
+                </Button>
+            </div>
         </div>
     )
 }

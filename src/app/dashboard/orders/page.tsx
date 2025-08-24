@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -153,6 +154,7 @@ export default function OrdersPage() {
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
         const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as Omit<Order, 'id'>) }));
+        ordersData.sort((a, b) => b.createdAt.toDate() - a.createdAt.toDate());
         setOrders(ordersData);
     });
     return () => unsubscribe();
@@ -190,7 +192,8 @@ export default function OrdersPage() {
     }).format(amount);
   };
 
-  const getInvoiceData = (order: Order) => {
+  const getInvoiceData = (order: Order | null) => {
+      if (!order) return null;
       const balance = order.sellingPrice - (order.advance || 0);
       return {
         id: order.orderId,
@@ -204,6 +207,8 @@ export default function OrdersPage() {
         measurements: order.measurements,
       }
   }
+
+  const invoiceData = getInvoiceData(currentOrder);
 
   return (
     <div className="space-y-8">
@@ -320,21 +325,23 @@ export default function OrdersPage() {
       {currentOrder && (
          <>
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
-                <DialogContent className="max-w-3xl p-0">
+               {invoiceData && (
+                 <DialogContent className="max-w-3xl p-0">
                     <DialogHeader className="p-6 pb-0">
                         <DialogTitle>Invoice #{currentOrder.orderId}</DialogTitle>
                         <DialogDescription>
                             Review the invoice details below before printing.
                         </DialogDescription>
                     </DialogHeader>
-                    <Invoice order={getInvoiceData(currentOrder)} />
+                    <Invoice order={invoiceData} />
                 </DialogContent>
+               )}
             </Dialog>
             <Dialog open={dialogs.status} onOpenChange={(open) => setDialogs(p => ({...p, status: open}))}>
                <UpdateStatusDialog order={currentOrder} setOpen={(open) => setDialogs(p => ({...p, status: open}))} />
             </Dialog>
             <Dialog open={dialogs.receipt} onOpenChange={(open) => setDialogs(p => ({...p, receipt: open}))}>
-                 <MeasurementSlip order={getInvoiceData(currentOrder)}/>
+                 {invoiceData && <MeasurementSlip order={invoiceData}/>}
             </Dialog>
          </>
       )}

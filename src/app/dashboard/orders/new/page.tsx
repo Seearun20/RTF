@@ -50,7 +50,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Invoice } from "@/components/dashboard/invoice";
+import { InvoicePrintWrapper } from "@/components/dashboard/invoice";
 import { MeasurementSlip } from "@/components/dashboard/measurement-slip";
 
 const measurementSchema = z.object({
@@ -195,7 +195,9 @@ export default function NewOrderPage() {
     const customer = customers.find(c => c.id === customerId);
     if (customer?.measurements) {
         Object.entries(customer.measurements).forEach(([key, value]) => {
-            setValue(`measurements.${key as keyof z.infer<typeof measurementSchema>}`, value);
+            if(value) {
+                setValue(`measurements.${key as keyof z.infer<typeof measurementSchema>}`, value);
+            }
         });
         toast({ title: "Measurements Fetched", description: `Measurements for ${customer.name} have been loaded.` });
     } else {
@@ -246,7 +248,7 @@ export default function NewOrderPage() {
             customerName: customerName,
             deliveryDate: data.deliveryDate,
             total: data.sellingPrice,
-            paid: data.advance,
+            paid: data.advance || 0,
             balance: data.sellingPrice - (data.advance || 0),
             items: getOrderItems(data),
             measurements: data.measurements
@@ -601,13 +603,7 @@ export default function NewOrderPage() {
 
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                 <DialogContent className="max-w-3xl p-0">
-                    <DialogHeader className="p-6 pb-0">
-                        <DialogTitle>Invoice #{lastSavedOrder.id}</DialogTitle>
-                        <DialogDescription>
-                            Review the invoice details below before printing.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <Invoice order={lastSavedOrder} />
+                    <InvoicePrintWrapper order={lastSavedOrder} />
                 </DialogContent>
             </Dialog>
 
@@ -620,5 +616,3 @@ export default function NewOrderPage() {
     </div>
   );
 }
-
-    
