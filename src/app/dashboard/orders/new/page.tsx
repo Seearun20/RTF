@@ -211,11 +211,32 @@ export default function NewOrderPage() {
 
 
   const onSubmit = async (data: OrderFormValues) => {
-    let customerId = data.customerId;
-    let customerName = customers.find(c => c.id === customerId)?.name;
-
     try {
         await runTransaction(db, async (transaction) => {
+            let customerId = data.customerId;
+            let customerName: string | undefined;
+
+            // --- ALL READS MUST GO FIRST ---
+            const invoiceCounterRef = doc(db, 'metadata', 'invoiceCounter');
+            const invoiceCounterDoc = await transaction.get(invoiceCounterRef);
+            
+            let itemRef;
+            let itemDoc;
+            if (data.orderType === 'readymade' && data.readymadeItemId) {
+              itemRef = doc(db, 'readyMadeStock', data.readymadeItemId);
+              itemDoc = await transaction.get(itemRef);
+              if (!itemDoc.exists() || itemDoc.data().quantity < 1) {
+                  throw new Error("Item is out of stock.");
+              }
+            }
+
+            // --- ALL WRITES GO AFTER READS ---
+            let newInvoiceNumber = 1;
+            if (invoiceCounterDoc.exists()) {
+                newInvoiceNumber = invoiceCounterDoc.data().lastNumber + 1;
+            }
+            transaction.set(invoiceCounterRef, { lastNumber: newInvoiceNumber }, { merge: true });
+
             if (data.customerType === 'new' && data.newCustomerName && data.newCustomerPhone) {
                 const newCustomerData = {
                     name: data.newCustomerName,
@@ -227,20 +248,17 @@ export default function NewOrderPage() {
                 transaction.set(newCustomerRef, newCustomerData);
                 customerId = newCustomerRef.id;
                 customerName = newCustomerData.name;
+            } else {
+                 customerName = customers.find(c => c.id === customerId)?.name;
             }
 
             if (!customerId || !customerName) {
                 throw new Error("Could not determine customer.");
             }
 
-            const invoiceCounterRef = doc(db, 'metadata', 'invoiceCounter');
-            const invoiceCounterDoc = await transaction.get(invoiceCounterRef);
-            
-            let newInvoiceNumber = 1;
-            if (invoiceCounterDoc.exists()) {
-                newInvoiceNumber = invoiceCounterDoc.data().lastNumber + 1;
+            if (itemRef && itemDoc) {
+                 transaction.update(itemRef, { quantity: itemDoc.data().quantity - 1 });
             }
-            transaction.set(invoiceCounterRef, { lastNumber: newInvoiceNumber }, { merge: true });
 
             const orderData = {
                 orderId,
@@ -257,20 +275,11 @@ export default function NewOrderPage() {
             delete (orderData as any).newCustomerEmail;
             delete (orderData as any).customerType;
             
-            if (data.orderType === 'readymade' && data.readymadeItemId) {
-              const itemRef = doc(db, 'readyMadeStock', data.readymadeItemId);
-              const itemDoc = await transaction.get(itemRef);
-              if (!itemDoc.exists() || itemDoc.data().quantity < 1) {
-                  throw new Error("Item is out of stock.");
-              }
-              transaction.update(itemRef, { quantity: itemDoc.data().quantity - 1 });
-            }
-
             const newOrderRef = doc(collection(db, "orders"));
             transaction.set(newOrderRef, orderData);
             
             setLastSavedOrder({
-                id: newOrderRef.id, // Firestore Doc ID
+                id: newOrderRef.id,
                 orderId: orderId,
                 invoiceNumber: newInvoiceNumber,
                 customerName: customerName,
@@ -289,9 +298,9 @@ export default function NewOrderPage() {
         form.reset();
         generateOrderId();
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error creating order: ", error);
-        toast({ variant: "destructive", title: "Transaction Failed", description: "There was a problem creating the order." });
+        toast({ variant: "destructive", title: "Transaction Failed", description: error.message || "There was a problem creating the order." });
     }
   };
   
@@ -665,4 +674,5 @@ export default function NewOrderPage() {
   );
 }
 
+    
     
