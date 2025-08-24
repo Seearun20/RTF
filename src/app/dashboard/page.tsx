@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { PageHeader } from "@/components/page-header";
@@ -79,6 +80,9 @@ export default function DashboardPage() {
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
         const newOrdersThisMonth = orders.filter(order => {
+            if (!order.createdAt || typeof order.createdAt.toDate !== 'function') {
+                return false;
+            }
             const orderDate = order.createdAt.toDate();
             return orderDate.getMonth() === currentMonth && orderDate.getFullYear() === currentYear;
         }).length;
@@ -88,6 +92,9 @@ export default function DashboardPage() {
         // Aggregate sales data for chart
         const monthlySales: { [key: string]: number } = {};
         orders.forEach(order => {
+             if (!order.createdAt || typeof order.createdAt.toDate !== 'function') {
+                return;
+            }
             const date = order.createdAt.toDate();
             const month = date.toLocaleString('default', { month: 'short' });
             if (monthlySales[month]) {
@@ -208,7 +215,7 @@ export default function DashboardPage() {
                     <TableCell>
                       <div className="font-medium">{order.customerName}</div>
                       <div className="text-sm text-muted-foreground">
-                        {order.orderId}
+                        #{order.invoiceNumber}
                       </div>
                     </TableCell>
                     <TableCell>{formatCurrency(order.sellingPrice)}</TableCell>
@@ -234,3 +241,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

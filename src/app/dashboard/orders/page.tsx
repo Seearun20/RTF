@@ -67,6 +67,7 @@ import { MeasurementSlip } from "@/components/dashboard/measurement-slip";
 export interface Order {
     id: string; // Firestore document ID
     orderId: string;
+    invoiceNumber: number;
     customerName: string;
     deliveryDate: string;
     sellingPrice: number;
@@ -198,6 +199,7 @@ export default function OrdersPage() {
       const balance = order.sellingPrice - (order.advance || 0);
       return {
         id: order.orderId,
+        invoiceNumber: order.invoiceNumber,
         customerName: order.customerName,
         deliveryDate: order.deliveryDate,
         total: order.sellingPrice,
@@ -234,7 +236,7 @@ export default function OrdersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order ID</TableHead>
+                <TableHead>Invoice #</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Total</TableHead>
@@ -250,7 +252,7 @@ export default function OrdersPage() {
                 const balance = order.sellingPrice - (order.advance || 0);
                 return (
                     <TableRow key={order.id}>
-                    <TableCell className="font-medium">{order.orderId}</TableCell>
+                    <TableCell className="font-medium">{order.invoiceNumber}</TableCell>
                     <TableCell>{order.customerName}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                         {getOrderItems(order)}
@@ -327,11 +329,11 @@ export default function OrdersPage() {
          <>
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                {invoiceData && (
-                 <DialogContent className="max-w-3xl p-0">
+                 <DialogContent className="max-w-2xl p-0">
                     <DialogHeader className="p-6 pb-0">
-                       <DialogTitle>Invoice #{invoiceData.id}</DialogTitle>
+                       <DialogTitle>Invoice #{invoiceData.invoiceNumber}</DialogTitle>
                        <DialogDescription>
-                         Review the invoice details below or print a copy.
+                         Review the invoice details below or print a copy for order {invoiceData.id}.
                        </DialogDescription>
                      </DialogHeader>
                     <InvoicePrintWrapper order={invoiceData} />
@@ -350,3 +352,5 @@ export default function OrdersPage() {
     </div>
   );
 }
+
+    

@@ -38,7 +38,7 @@ import { Customer } from "@/app/dashboard/customers/page";
 import { ReadyMadeStock } from "@/app/dashboard/stock/readymade/page";
 import { FabricStock } from "@/app/dashboard/stock/fabric/page";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, addDoc, doc, getDoc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, getDoc, runTransaction } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Loader2, Receipt, FileText } from "lucide-react";
 import {
@@ -129,7 +129,7 @@ export default function NewOrderPage() {
 
   const generateOrderId = () => {
       const date = new Date();
-      const prefix = "ORD-"
+      const prefix = "RTF-"
       const timestamp = date.getTime();
       setOrderId(`${prefix}${timestamp}`);
   }
@@ -163,13 +163,13 @@ export default function NewOrderPage() {
       newCustomerEmail: "",
       orderType: "stitching",
       deliveryDate: "",
-      sellingPrice: 0,
-      advance: 0,
       stitchingService: "",
       readymadeItemName: "",
       readymadeSize: "",
       fabricId: "",
       fabricLength: 0,
+      sellingPrice: 0,
+      advance: 0,
       measurements: {
         shirtLength: "",
         pantLength: "",
@@ -210,56 +210,74 @@ export default function NewOrderPage() {
     let customerId = data.customerId;
     let customerName = customers.find(c => c.id === customerId)?.name;
 
-    if (data.customerType === 'new' && data.newCustomerName && data.newCustomerPhone) {
-        const newCustomerData = {
-            name: data.newCustomerName,
-            phone: data.newCustomerPhone,
-            email: data.newCustomerEmail || '',
-        };
-        const docRef = await addDoc(collection(db, "customers"), newCustomerData);
-        customerId = docRef.id;
-        customerName = newCustomerData.name;
-    }
-
-    if (!customerId || !customerName) {
-        toast({ variant: "destructive", title: "Error", description: "Could not determine customer." });
-        return;
-    }
-
-    const orderData = {
-        orderId,
-        customerId,
-        customerName,
-        ...data,
-        status: "In Progress",
-        createdAt: new Date(),
-    };
-    
-    // Clean up unnecessary fields
-    delete (orderData as any).newCustomerName;
-    delete (orderData as any).newCustomerPhone;
-    delete (orderData as any).newCustomerEmail;
-    delete (orderData as any).customerType;
-    
     try {
-        await addDoc(collection(db, "orders"), orderData);
-        setLastSavedOrder({
-            id: orderId,
-            customerName: customerName,
-            deliveryDate: data.deliveryDate,
-            total: data.sellingPrice,
-            paid: data.advance || 0,
-            balance: data.sellingPrice - (data.advance || 0),
-            items: getOrderItems(data),
-            measurements: data.measurements
+        await runTransaction(db, async (transaction) => {
+            if (data.customerType === 'new' && data.newCustomerName && data.newCustomerPhone) {
+                const newCustomerData = {
+                    name: data.newCustomerName,
+                    phone: data.newCustomerPhone,
+                    email: data.newCustomerEmail || '',
+                    measurements: data.measurements,
+                };
+                const newCustomerRef = doc(collection(db, "customers"));
+                transaction.set(newCustomerRef, newCustomerData);
+                customerId = newCustomerRef.id;
+                customerName = newCustomerData.name;
+            }
+
+            if (!customerId || !customerName) {
+                throw new Error("Could not determine customer.");
+            }
+
+            const invoiceCounterRef = doc(db, 'metadata', 'invoiceCounter');
+            const invoiceCounterDoc = await transaction.get(invoiceCounterRef);
+            
+            let newInvoiceNumber = 1;
+            if (invoiceCounterDoc.exists()) {
+                newInvoiceNumber = invoiceCounterDoc.data().lastNumber + 1;
+            }
+            transaction.set(invoiceCounterRef, { lastNumber: newInvoiceNumber }, { merge: true });
+
+            const orderData = {
+                orderId,
+                invoiceNumber: newInvoiceNumber,
+                customerId,
+                customerName,
+                ...data,
+                status: "In Progress",
+                createdAt: new Date(),
+            };
+            
+            delete (orderData as any).newCustomerName;
+            delete (orderData as any).newCustomerPhone;
+            delete (orderData as any).newCustomerEmail;
+            delete (orderData as any).customerType;
+
+            const newOrderRef = doc(collection(db, "orders"));
+            transaction.set(newOrderRef, orderData);
+            
+            setLastSavedOrder({
+                id: newOrderRef.id, // Firestore Doc ID
+                orderId: orderId,
+                invoiceNumber: newInvoiceNumber,
+                customerName: customerName,
+                deliveryDate: data.deliveryDate,
+                total: data.sellingPrice,
+                paid: data.advance || 0,
+                balance: data.sellingPrice - (data.advance || 0),
+                items: getOrderItems(data),
+                measurements: data.measurements
+            });
         });
+
         setDialogs(prev => ({...prev, postOrder: true}));
         toast({ title: "Order Created!", description: `Order ${orderId} has been saved.` });
         form.reset();
         generateOrderId();
+
     } catch (error) {
         console.error("Error creating order: ", error);
-        toast({ variant: "destructive", title: "Error", description: "There was a problem creating the order." });
+        toast({ variant: "destructive", title: "Transaction Failed", description: "There was a problem creating the order." });
     }
   };
   
@@ -587,7 +605,7 @@ export default function NewOrderPage() {
                     <DialogHeader>
                         <DialogTitle>Order Created Successfully!</DialogTitle>
                         <DialogDescription>
-                            Order #{lastSavedOrder.id} has been saved. What would you like to do next?
+                            Order #{lastSavedOrder.orderId} (Invoice #{lastSavedOrder.invoiceNumber}) has been saved. What would you like to do next?
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-2 sm:justify-center">
@@ -616,3 +634,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    

@@ -10,7 +10,9 @@ import React from "react";
 
 interface InvoiceProps {
     order: {
-        id: string;
+        id: string; // This is now the Firestore Document ID, not the Order ID
+        orderId: string;
+        invoiceNumber: number;
         customerName: string;
         deliveryDate: string;
         total: number;
@@ -36,11 +38,12 @@ export const Invoice = React.forwardRef<HTMLDivElement, InvoiceProps>(({ order }
                         <div>
                             <RtfLogo className="w-16 h-16 text-primary" />
                             <h1 className="text-2xl font-bold font-headline mt-2">Raghav Tailors & Fabrics</h1>
-                            <p className="text-muted-foreground">123 Fashion Street, New Delhi, 110001</p>
+                            <p className="text-muted-foreground text-sm">Dineshpur Main Market 263150, U.S.Nagar Uttarakhand, India</p>
+                             <p className="text-muted-foreground text-sm">Ph: 8766877348</p>
                         </div>
                         <div className="text-right">
                             <h2 className="text-3xl font-bold text-primary font-headline">Invoice</h2>
-                            <p className="text-muted-foreground">#{order.id}</p>
+                            <p className="text-muted-foreground">#{order.invoiceNumber}</p>
                             <p>Date: {new Date().toLocaleDateString()}</p>
                         </div>
                     </div>
@@ -121,9 +124,9 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
     };
     
     return (
-        <div>
+        <div className="max-h-[80vh] overflow-y-auto">
             <Invoice ref={componentRef} order={order} />
-            <div className="p-6 pt-0 print:hidden">
+            <div className="p-6 pt-0 print:hidden sticky bottom-0 bg-background/80 backdrop-blur-sm">
                  <Button onClick={handlePrint} className="w-full">
                     <Printer className="mr-2"/>
                     Print Invoice
@@ -132,3 +135,5 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
         </div>
     )
 }
+
+    
