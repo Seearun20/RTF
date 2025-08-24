@@ -679,6 +679,10 @@ export default function NewOrderPage() {
 
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                 <DialogContent className="max-w-3xl p-0">
+                    <DialogHeader className="p-6 pb-0">
+                        <DialogTitle>Invoice #{lastSavedOrder.invoiceNumber}</DialogTitle>
+                        <DialogDescription>Review and print the invoice for order #{lastSavedOrder.orderId}.</DialogDescription>
+                    </DialogHeader>
                     <InvoicePrintWrapper order={lastSavedOrder} />
                 </DialogContent>
             </Dialog>
@@ -700,8 +704,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
-    
-    
 
     
-
