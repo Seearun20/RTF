@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -19,21 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  customers as mockCustomers,
-  serviceCharges,
-  fabricStock,
-  readyMadeStock,
-} from "@/lib/data";
+import { serviceCharges } from "@/lib/data";
 import { Separator } from "@/components/ui/separator";
 import { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -42,38 +35,45 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Customer } from "@/app/dashboard/customers/page";
+import { ReadyMadeStock } from "@/app/dashboard/stock/readymade/page";
+import { FabricStock } from "@/app/dashboard/stock/fabric/page";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, doc, getDoc } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
+import { Download, Loader2 } from "lucide-react";
 
-const orderSchema = z.object({
-  customerType: z.enum(['existing', 'new']),
-  customerId: z.string().optional(),
-  newCustomerName: z.string().optional(),
-  newCustomerPhone: z.string().optional(),
-  orderType: z.enum(["stitching", "readymade", "fabric"]),
-  deliveryDate: z.string().min(1, "Delivery date is required"),
-  
-  // Stitching fields
-  stitchingService: z.string().optional(),
-  measurements: z.object({
-    length: z.string().optional(),
+const measurementSchema = z.object({
+    shirtLength: z.string().optional(),
+    pantLength: z.string().optional(),
     chest: z.string().optional(),
     sleeve: z.string().optional(),
     shoulder: z.string().optional(),
     waist: z.string().optional(),
     hip: z.string().optional(),
     notes: z.string().optional(),
-  }).optional(),
+});
+
+const orderSchema = z.object({
+  customerType: z.enum(['existing', 'new']),
+  customerId: z.string().optional(),
+  newCustomerName: z.string().optional(),
+  newCustomerPhone: z.string().optional(),
+  newCustomerEmail: z.string().email("Invalid email address").optional().or(z.literal('')),
+  orderType: z.enum(["stitching", "readymade", "fabric"]),
+  deliveryDate: z.string().min(1, "Delivery date is required"),
   
-  // Ready-made fields
+  stitchingService: z.string().optional(),
+  measurements: measurementSchema.optional(),
+  
   readymadeId: z.string().optional(),
   readymadeSize: z.string().optional(),
 
-  // Fabric fields
   fabricId: z.string().optional(),
   fabricLength: z.coerce.number().optional(),
 
   sellingPrice: z.coerce.number().min(1, "Selling price is required"),
+  advance: z.coerce.number().optional().default(0),
+
 }).refine(data => {
     if (data.customerType === 'existing' && !data.customerId) return false;
     return true;
@@ -91,28 +91,50 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
-const measurementFields: { [key: string]: string[] } = {
-    'Shirt': ['length', 'chest', 'sleeve', 'shoulder', 'notes'],
-    'Pant': ['length', 'waist', 'hip', 'notes'],
-    'Kurta+Pyjama': ['length', 'chest', 'sleeve', 'shoulder', 'waist', 'hip', 'notes'],
-    'Kurta': ['length', 'chest', 'sleeve', 'shoulder', 'notes'],
-    'Pyjama': ['length', 'waist', 'hip', 'notes'],
-    '3pc Suit': ['length', 'chest', 'sleeve', 'shoulder', 'waist', 'hip', 'notes'],
-    '2pc Suit': ['length', 'chest', 'sleeve', 'shoulder', 'waist', 'hip', 'notes'],
-    'Blazer': ['length', 'chest', 'sleeve', 'shoulder', 'notes'],
-    'Sherwani': ['length', 'chest', 'sleeve', 'shoulder', 'notes'],
+const measurementFields: { [key: string]: Array<keyof z.infer<typeof measurementSchema>> } = {
+    'Shirt': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'notes'],
+    'Pant': ['pantLength', 'waist', 'hip', 'notes'],
+    'Kurta+Pyjama': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'pantLength', 'waist', 'hip', 'notes'],
+    'Kurta': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'notes'],
+    'Pyjama': ['pantLength', 'waist', 'hip', 'notes'],
+    '3pc Suit': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'pantLength', 'waist', 'hip', 'notes'],
+    '2pc Suit': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'pantLength', 'waist', 'hip', 'notes'],
+    'Blazer': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'notes'],
+    'Sherwani': ['shirtLength', 'chest', 'sleeve', 'shoulder', 'notes'],
 };
 
 export default function NewOrderPage() {
-  const [receipt, setReceipt] = useState<Partial<OrderFormValues> | null>(null);
+  const { toast } = useToast();
+  const [receipt, setReceipt] = useState<Partial<OrderFormValues> & { orderId?: string } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [readyMadeStock, setReadyMadeStock] = useState<ReadyMadeStock[]>([]);
+  const [fabricStock, setFabricStock] = useState<FabricStock[]>([]);
+  const [orderId, setOrderId] = useState('');
+
+  const generateOrderId = () => {
+      const date = new Date();
+      const prefix = "ORD-"
+      const timestamp = date.getTime();
+      setOrderId(`${prefix}${timestamp}`);
+  }
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const customersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
-      setCustomers(customersData);
+    generateOrderId();
+    const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+      setCustomers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer)));
     });
-    return () => unsubscribe();
+    const unsubReadyMade = onSnapshot(collection(db, "readyMadeStock"), (snapshot) => {
+      setReadyMadeStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReadyMadeStock)));
+    });
+    const unsubFabric = onSnapshot(collection(db, "fabricStock"), (snapshot) => {
+      setFabricStock(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FabricStock)));
+    });
+    
+    return () => {
+        unsubCustomers();
+        unsubReadyMade();
+        unsubFabric();
+    };
   }, []);
 
   const form = useForm<OrderFormValues>({
@@ -122,18 +144,76 @@ export default function NewOrderPage() {
       orderType: "stitching",
       deliveryDate: "",
       sellingPrice: 0,
+      advance: 0,
     },
   });
 
-  const orderType = form.watch("orderType");
-  const stitchingService = form.watch("stitchingService");
-  const customerType = form.watch("customerType");
+  const { formState: { isSubmitting }, watch, setValue, getValues } = form;
+  const watchedValues = watch();
 
-  const onSubmit = (data: OrderFormValues) => {
-    console.log(data);
-    // Here you would typically handle adding the new customer to your database
-    // if data.customerType === 'new'
-    setReceipt(data);
+  const handleFetchMeasurements = async () => {
+    const customerId = getValues("customerId");
+    if (!customerId) {
+        toast({ variant: "destructive", title: "No Customer Selected", description: "Please select a customer first." });
+        return;
+    }
+    const customer = customers.find(c => c.id === customerId);
+    if (customer?.measurements) {
+        Object.entries(customer.measurements).forEach(([key, value]) => {
+            setValue(`measurements.${key as keyof z.infer<typeof measurementSchema>}`, value);
+        });
+        toast({ title: "Measurements Fetched", description: `Measurements for ${customer.name} have been loaded.` });
+    } else {
+        toast({ variant: "destructive", title: "No Measurements Found", description: `No saved measurements for ${customer?.name}.` });
+    }
+  };
+
+
+  const onSubmit = async (data: OrderFormValues) => {
+    let customerId = data.customerId;
+    let customerName = customers.find(c => c.id === customerId)?.name;
+
+    if (data.customerType === 'new' && data.newCustomerName && data.newCustomerPhone) {
+        const newCustomerData = {
+            name: data.newCustomerName,
+            phone: data.newCustomerPhone,
+            email: data.newCustomerEmail || '',
+        };
+        const docRef = await addDoc(collection(db, "customers"), newCustomerData);
+        customerId = docRef.id;
+        customerName = newCustomerData.name;
+    }
+
+    if (!customerId || !customerName) {
+        toast({ variant: "destructive", title: "Error", description: "Could not determine customer." });
+        return;
+    }
+
+    const orderData = {
+        orderId,
+        customerId,
+        customerName,
+        ...data,
+        status: "In Progress",
+        createdAt: new Date(),
+    };
+    
+    // Clean up unnecessary fields
+    delete (orderData as any).newCustomerName;
+    delete (orderData as any).newCustomerPhone;
+    delete (orderData as any).newCustomerEmail;
+    delete (orderData as any).customerType;
+    
+    try {
+        await addDoc(collection(db, "orders"), orderData);
+        setReceipt({...data, orderId });
+        toast({ title: "Order Created!", description: `Order ${orderId} has been saved.` });
+        form.reset();
+        generateOrderId();
+    } catch (error) {
+        console.error("Error creating order: ", error);
+        toast({ variant: "destructive", title: "Error", description: "There was a problem creating the order." });
+    }
   };
   
   const formatCurrency = (amount: number) => {
@@ -150,13 +230,21 @@ export default function NewOrderPage() {
   }
   
   const renderMeasurementFields = () => {
+      const stitchingService = watchedValues.stitchingService;
       if (!stitchingService || !measurementFields[stitchingService]) return null;
       
       return (
          <Card>
             <CardHeader>
-                <CardTitle className="font-headline">Measurements</CardTitle>
-                <CardDescription>Enter measurements for the {stitchingService}.</CardDescription>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <CardTitle className="font-headline">Measurements</CardTitle>
+                        <CardDescription>Enter measurements for the {stitchingService}.</CardDescription>
+                    </div>
+                    {watchedValues.customerType === 'existing' && watchedValues.customerId && (
+                        <Button type="button" size="sm" variant="outline" onClick={handleFetchMeasurements}><Download className="mr-2 h-4 w-4"/> Fetch</Button>
+                    )}
+                </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {measurementFields[stitchingService].map(field => 
@@ -164,10 +252,10 @@ export default function NewOrderPage() {
                      <FormField
                         key={field}
                         control={form.control}
-                        name={`measurements.${field as keyof OrderFormValues['measurements']}`}
+                        name={`measurements.${field as keyof z.infer<typeof measurementSchema>}`}
                         render={({ field: formField }) => (
                             <FormItem>
-                                <FormLabel className="capitalize">{field}</FormLabel>
+                                <FormLabel className="capitalize">{field.replace(/([A-Z])/g, ' $1')}</FormLabel>
                                 <FormControl>
                                     <Input placeholder="..." {...formField} />
                                 </FormControl>
@@ -239,7 +327,7 @@ export default function NewOrderPage() {
                       </FormItem>
                     )}
                   />
-                  {customerType === 'existing' ? (
+                  {watchedValues.customerType === 'existing' ? (
                      <FormField
                         control={form.control}
                         name="customerId"
@@ -262,32 +350,11 @@ export default function NewOrderPage() {
                       />
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        <FormField
-                            control={form.control}
-                            name="newCustomerName"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>New Customer Name</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter customer's full name" {...field} />
-                                    </FormControl>
-                                    <FormMessage/>
-                                </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="newCustomerPhone"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>New Customer Phone</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Enter customer's phone number" {...field} />
-                                    </FormControl>
-                                    <FormMessage/>
-                                </FormItem>
-                            )}
-                        />
+                        <FormField control={form.control} name="newCustomerName" render={({ field }) => (<FormItem><FormLabel>New Customer Name</FormLabel><FormControl><Input placeholder="Enter customer's full name" {...field} /></FormControl><FormMessage/></FormItem>)}/>
+                        <FormField control={form.control} name="newCustomerPhone" render={({ field }) => (<FormItem><FormLabel>New Customer Phone</FormLabel><FormControl><Input placeholder="Enter customer's phone number" {...field} /></FormControl><FormMessage/></FormItem>)}/>
+                        <div className="md:col-span-2">
+                            <FormField control={form.control} name="newCustomerEmail" render={({ field }) => (<FormItem><FormLabel>New Customer Email (Optional)</FormLabel><FormControl><Input placeholder="customer@example.com" {...field} /></FormControl><FormMessage/></FormItem>)}/>
+                        </div>
                     </div>
                   )}
               </CardContent>
@@ -299,198 +366,50 @@ export default function NewOrderPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <FormField
-                    control={form.control}
-                    name="deliveryDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Delivery Date</FormLabel>
-                        <FormControl>
-                           <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                 <FormField
-                    control={form.control}
-                    name="orderType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Order Type</FormLabel>
-                         <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select the type of order" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                <SelectItem value="stitching">Stitching Service</SelectItem>
-                                <SelectItem value="readymade">Sell Ready-Made Item</SelectItem>
-                                <SelectItem value="fabric">Sell Fabric Only</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                   <FormField control={form.control} name="deliveryDate" render={({ field }) => (<FormItem><FormLabel>Delivery Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                   <FormField control={form.control} name="orderType" render={({ field }) => (<FormItem><FormLabel>Order Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select the type of order" /></SelectTrigger></FormControl><SelectContent><SelectItem value="stitching">Stitching Service</SelectItem><SelectItem value="readymade">Sell Ready-Made Item</SelectItem><SelectItem value="fabric">Sell Fabric Only</SelectItem></SelectContent></Select><FormMessage /></FormItem>)}/>
                 </div>
               </CardContent>
             </Card>
             
-            {orderType === 'stitching' && (
+            {watchedValues.orderType === 'stitching' && (
                 <>
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Service & Fabric</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="font-headline">Service & Fabric</CardTitle></CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField
-                            control={form.control}
-                            name="stitchingService"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Stitching Service</FormLabel>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                        <SelectTrigger>
-                                        <SelectValue placeholder="Select a stitching service" />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {Object.keys(serviceCharges).map((service) => (
-                                            <SelectItem key={service} value={service}>{service}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                    </Select>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="fabricId"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Fabric (Optional)</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select fabric from stock" />
-                                    </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                    {fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
+                         <FormField control={form.control} name="stitchingService" render={({ field }) => (<FormItem><FormLabel>Stitching Service</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stitching service" /></SelectTrigger></FormControl><SelectContent>{Object.keys(serviceCharges).map((service) => (<SelectItem key={service} value={service}>{service}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                         <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric (Optional)</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select fabric from stock" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
                     </CardContent>
                 </Card>
                 {renderMeasurementFields()}
                 </>
             )}
 
-            {orderType === 'readymade' && (
+            {watchedValues.orderType === 'readymade' && (
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Ready-Made Item Details</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="font-headline">Ready-Made Item Details</CardTitle></CardHeader>
                      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField
-                            control={form.control}
-                            name="readymadeId"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Item</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {readyMadeStock.map(i => <SelectItem key={i.id} value={i.id}>{i.item}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="readymadeSize"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Size</FormLabel>
-                                <FormControl>
-                                <Input placeholder="Enter size" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
+                         <FormField control={form.control} name="readymadeId" render={({ field }) => (<FormItem><FormLabel>Item</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger></FormControl><SelectContent>{readyMadeStock.map(i => <SelectItem key={i.id} value={i.id}>{i.item}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                         <FormField control={form.control} name="readymadeSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><FormControl><Input placeholder="Enter size" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                     </CardContent>
                 </Card>
             )}
 
-            {orderType === 'fabric' && (
+            {watchedValues.orderType === 'fabric' && (
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline">Fabric Sale Details</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="font-headline">Fabric Sale Details</CardTitle></CardHeader>
                      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                            control={form.control}
-                            name="fabricId"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Fabric</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                    <SelectTrigger><SelectValue placeholder="Select a fabric" /></SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}
-                                </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="fabricLength"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Length (mtrs)</FormLabel>
-                                <FormControl>
-                                <Input type="number" placeholder="Enter length" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
+                        <FormField control={form.control} name="fabricId" render={({ field }) => (<FormItem><FormLabel>Fabric</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a fabric" /></SelectTrigger></FormControl><SelectContent>{fabricStock.map(f => <SelectItem key={f.id} value={f.id}>{f.type}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
+                        <FormField control={form.control} name="fabricLength" render={({ field }) => (<FormItem><FormLabel>Length (mtrs)</FormLabel><FormControl><Input type="number" placeholder="Enter length" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                     </CardContent>
                 </Card>
             )}
             
             <Card>
                 <CardHeader><CardTitle>Pricing</CardTitle></CardHeader>
-                <CardContent>
-                    <FormField
-                        control={form.control}
-                        name="sellingPrice"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Total Selling Price</FormLabel>
-                            <FormControl>
-                            <Input type="number" placeholder="Enter final price" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                        )}
-                    />
+                <CardContent className="grid grid-cols-2 gap-4">
+                    <FormField control={form.control} name="sellingPrice" render={({ field }) => (<FormItem><FormLabel>Total Selling Price</FormLabel><FormControl><Input type="number" placeholder="Enter final price" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                    <FormField control={form.control} name="advance" render={({ field }) => (<FormItem><FormLabel>Advance Paid</FormLabel><FormControl><Input type="number" placeholder="Enter advance amount" {...field} /></FormControl><FormMessage /></FormItem>)}/>
                 </CardContent>
             </Card>
 
@@ -503,41 +422,45 @@ export default function NewOrderPage() {
                       <CardDescription>Preview of the order details.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 font-mono text-sm">
-                      <div className="flex justify-between"><span>Order ID:</span> <span>ORD-2407-004</span></div>
-                      <div className="flex justify-between"><span>Customer:</span> <span>{getCustomerName(receipt)}</span></div>
-                      <div className="flex justify-between"><span>Delivery:</span> <span>{form.watch('deliveryDate')}</span></div>
+                      <div className="flex justify-between"><span>Order ID:</span> <span>{receipt?.orderId || orderId}</span></div>
+                      <div className="flex justify-between"><span>Customer:</span> <span>{getCustomerName(watchedValues)}</span></div>
+                      <div className="flex justify-between"><span>Delivery:</span> <span>{watchedValues.deliveryDate}</span></div>
                       <Separator/>
-                      <p className="font-semibold uppercase">{receipt?.orderType || 'N/A'}</p>
+                      <p className="font-semibold uppercase">{watchedValues.orderType || 'N/A'}</p>
                       
-                       {receipt?.orderType === 'stitching' && receipt.stitchingService && (
+                       {watchedValues.orderType === 'stitching' && watchedValues.stitchingService && (
                             <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                                <p className="font-sans font-semibold pb-2">{receipt.stitchingService}</p>
-                                {receipt.measurements && Object.entries(receipt.measurements).map(([key, value]) => value && (
-                                   <div key={key} className="flex justify-between">
-                                       <span className="capitalize">{key}:</span>
+                                <p className="font-sans font-semibold pb-2">{watchedValues.stitchingService}</p>
+                                {watchedValues.measurements && Object.entries(watchedValues.measurements).map(([key, value]) => value && (
+                                   <div key={key} className="flex justify-between text-xs">
+                                       <span className="capitalize text-muted-foreground">{key.replace(/([A-Z])/g, ' $1')}:</span>
                                        <span>{value}</span>
                                    </div>
                                 ))}
                             </div>
                        )}
-                       {receipt?.orderType === 'readymade' && (
+                       {watchedValues.orderType === 'readymade' && (
                            <div className="p-4 bg-muted rounded-md">
-                               <p>{readyMadeStock.find(i => i.id === receipt.readymadeId)?.item}</p>
-                               <p className="text-xs">Size: {receipt.readymadeSize}</p>
+                               <p>{readyMadeStock.find(i => i.id === watchedValues.readymadeId)?.item}</p>
+                               <p className="text-xs">Size: {watchedValues.readymadeSize}</p>
                            </div>
                        )}
-                        {receipt?.orderType === 'fabric' && (
+                        {watchedValues.orderType === 'fabric' && (
                            <div className="p-4 bg-muted rounded-md">
-                               <p>{fabricStock.find(f => f.id === receipt.fabricId)?.type}</p>
-                               <p className="text-xs">Length: {receipt.fabricLength} mtrs</p>
+                               <p>{fabricStock.find(f => f.id === watchedValues.fabricId)?.type}</p>
+                               <p className="text-xs">Length: {watchedValues.fabricLength} mtrs</p>
                            </div>
                        )}
 
                        <Separator/>
                       <div className="space-y-2">
-                        <div className="flex justify-between font-bold"><span>Total Bill:</span> <span>{formatCurrency(receipt?.sellingPrice || 0)}</span></div>
+                        <div className="flex justify-between font-bold"><span>Total Bill:</span> <span>{formatCurrency(watchedValues.sellingPrice || 0)}</span></div>
+                         <div className="flex justify-between"><span>Advance:</span> <span>{formatCurrency(watchedValues.advance || 0)}</span></div>
+                        <div className="flex justify-between text-destructive font-bold"><span>Balance:</span> <span>{formatCurrency((watchedValues.sellingPrice || 0) - (watchedValues.advance || 0))}</span></div>
                       </div>
-                      <Button type="submit" className="w-full">Generate Receipt & Invoice</Button>
+                      <Button type="submit" className="w-full" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : "Save & Generate Receipt"}
+                      </Button>
                   </CardContent>
               </Card>
           </div>
@@ -546,3 +469,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    
