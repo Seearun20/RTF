@@ -125,7 +125,14 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
         if (printWindow && componentRef.current) {
             const printContent = componentRef.current;
             const styles = Array.from(document.styleSheets)
-                .map(s => Array.from(s.cssRules).map(r => r.cssText).join('\n'))
+                .map(s => {
+                    try {
+                        return Array.from(s.cssRules).map(r => r.cssText).join('\n');
+                    } catch (e) {
+                        console.warn("Could not read stylesheet rules. This is likely due to a cross-origin security restriction.", e);
+                        return '';
+                    }
+                })
                 .join('\n');
             
             const contentEl = document.createElement('div');
@@ -152,18 +159,15 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
     
     return (
         <div className="max-h-[80vh] overflow-y-auto">
-            <div className="hidden">
-                 <InvoiceToPrint ref={componentRef} order={order} />
-            </div>
-            <div className="p-6 pt-0 print:hidden sticky bottom-0 bg-background/80 backdrop-blur-sm">
+            <div className="p-6 pt-0 print:hidden sticky bottom-0 bg-background/80 backdrop-blur-sm border-t">
                  <Button onClick={handlePrint} className="w-full">
                     <Printer className="mr-2"/>
                     Print Invoice
                 </Button>
             </div>
             {/* The visible component for the user to see */}
-            <div className="p-8">
-                 <InvoiceToPrint order={order} />
+            <div>
+                 <InvoiceToPrint ref={componentRef} order={order} />
             </div>
         </div>
     )
