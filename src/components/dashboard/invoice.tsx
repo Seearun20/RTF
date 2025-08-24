@@ -7,6 +7,7 @@ import { RtfLogo } from "@/components/rtf-logo";
 import { Button } from "../ui/button";
 import { Printer } from "lucide-react";
 import React from "react";
+import { useReactToPrint } from "react-to-print";
 
 interface InvoiceProps {
     order: {
@@ -32,7 +33,7 @@ export const Invoice = React.forwardRef<HTMLDivElement, InvoiceProps>(({ order }
 
     return (
         <div ref={ref} className="p-8 print:p-0 bg-background text-foreground">
-            <div className="max-w-4xl mx-auto p-8 rounded-lg shadow-lg bg-card border">
+            <div className="max-w-4xl mx-auto p-8 rounded-lg shadow-lg bg-card border print:shadow-none print:border-none">
                 <header className="flex justify-between items-center pb-6 border-b">
                     <div>
                         <RtfLogo className="w-16 h-16 text-primary" />
@@ -117,60 +118,9 @@ Invoice.displayName = "Invoice";
 export function InvoicePrintWrapper({ order }: InvoiceProps) {
     const componentRef = React.useRef(null);
     
-    const handlePrint = async () => {
-        const printContentNode = componentRef.current;
-        if (printContentNode) {
-            try {
-                const cssResponse = await fetch('/globals.css');
-                const cssText = await cssResponse.text();
-
-                const printWindow = window.open('', '_blank');
-                if (!printWindow) {
-                    alert('Please allow popups for this website');
-                    return;
-                }
-
-                const printDocument = printWindow.document;
-                printDocument.write(`
-                    <html>
-                        <head>
-                            <title>Print Invoice #${order.invoiceNumber}</title>
-                            <style>
-                                ${cssText}
-                                @media print {
-                                  body {
-                                    -webkit-print-color-adjust: exact;
-                                  }
-                                  .print\\:p-0 { padding: 0 !important; }
-                                  .print\\:shadow-none { box-shadow: none !important; }
-                                  .print\\:border-none { border: none !important; }
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            <div id="print-content"></div>
-                        </body>
-                    </html>
-                `);
-
-                const printContentDiv = printDocument.getElementById('print-content');
-                if(printContentDiv) {
-                  printContentDiv.innerHTML = (printContentNode as HTMLDivElement).innerHTML;
-                }
-                
-                setTimeout(() => {
-                    printDocument.close();
-                    printWindow.focus();
-                    printWindow.print();
-                    printWindow.close();
-                }, 250);
-
-            } catch (error) {
-                console.error("Failed to prepare for printing:", error);
-                alert("Could not prepare document for printing.");
-            }
-        }
-    };
+    const handlePrint = useReactToPrint({
+        content: () => componentRef.current,
+    });
     
     return (
         <div className="max-h-[80vh] overflow-y-auto">
