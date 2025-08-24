@@ -22,7 +22,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { StitchSavvyLogo } from "@/components/stitch-savvy-logo";
+import { RtfLogo } from "@/components/rtf-logo";
 import { Button } from "@/components/ui/button";
 import { usePathname } from "next/navigation";
 import {
@@ -48,9 +48,9 @@ export default function DashboardLayout({
       <Sidebar>
         <SidebarHeader>
           <div className="flex items-center gap-2">
-            <StitchSavvyLogo className="w-8 h-8 text-sidebar-primary" />
+            <RtfLogo className="w-8 h-8 text-sm" />
             <span className="text-lg font-semibold font-headline text-sidebar-foreground">
-              StitchSavvy
+              Raghav Tailors
             </span>
           </div>
         </SidebarHeader>

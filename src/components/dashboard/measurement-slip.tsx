@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
-import { StitchSavvyLogo } from "../stitch-savvy-logo";
+import { RtfLogo } from "../rtf-logo";
 import { Separator } from "../ui/separator";
 
 interface MeasurementSlipProps {
@@ -65,9 +65,17 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
                                 margin-bottom: 16px;
                             }
                             .slip-header .logo {
-                                color: #4B0082;
+                                font-family: 'Playfair Display', serif;
+                                font-weight: bold;
+                                font-size: 1.5rem;
+                                color: #fff;
+                                background-color: #4A0082;
                                 width: 48px;
                                 height: 48px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                border-radius: 8px;
                                 margin: 0 auto;
                             }
                             .slip-header h1 {
@@ -162,7 +170,7 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
         </DialogHeader>
         <div id="measurement-slip-content">
             <div className="slip-header text-center mb-4">
-                <StitchSavvyLogo className="w-12 h-12 text-primary mx-auto" />
+                <RtfLogo className="w-12 h-12 text-lg mx-auto" />
                 <h1 className="font-headline text-xl font-bold text-primary mt-2">Measurement Slip</h1>
                 <p className="text-sm text-muted-foreground">Order #{order.id}</p>
             </div>

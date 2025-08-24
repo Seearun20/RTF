@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'StitchSavvy',
+  title: 'Raghav Tailors & Fabrics',
   description: 'Manage your tailoring business with ease.',
 };
 

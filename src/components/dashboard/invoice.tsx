@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { StitchSavvyLogo } from "@/components/stitch-savvy-logo";
+import { RtfLogo } from "@/components/rtf-logo";
 import { Button } from "../ui/button";
 import { Printer } from "lucide-react";
 import React from "react";
@@ -34,7 +34,7 @@ export const Invoice = React.forwardRef<HTMLDivElement, InvoiceProps>(({ order }
                 <CardHeader className="space-y-4">
                     <div className="flex items-start justify-between">
                         <div>
-                            <StitchSavvyLogo className="w-16 h-16 text-primary" />
+                            <RtfLogo className="w-16 h-16 text-primary" />
                             <h1 className="text-2xl font-bold font-headline mt-2">Raghav Tailors & Fabrics</h1>
                             <p className="text-muted-foreground">123 Fashion Street, New Delhi, 110001</p>
                         </div>
