@@ -40,7 +40,18 @@ import { FabricStock } from "@/app/dashboard/stock/fabric/page";
 import { db } from "@/lib/firebase";
 import { collection, onSnapshot, addDoc, doc, getDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Receipt, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Invoice } from "@/components/dashboard/invoice";
+import { MeasurementSlip } from "@/components/dashboard/measurement-slip";
 
 const measurementSchema = z.object({
     shirtLength: z.string().optional(),
@@ -105,11 +116,16 @@ const measurementFields: { [key: string]: Array<keyof z.infer<typeof measurement
 
 export default function NewOrderPage() {
   const { toast } = useToast();
-  const [receipt, setReceipt] = useState<Partial<OrderFormValues> & { orderId?: string } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [readyMadeStock, setReadyMadeStock] = useState<ReadyMadeStock[]>([]);
   const [fabricStock, setFabricStock] = useState<FabricStock[]>([]);
   const [orderId, setOrderId] = useState('');
+  const [lastSavedOrder, setLastSavedOrder] = useState<any>(null);
+  const [dialogs, setDialogs] = useState({
+      postOrder: false,
+      invoice: false,
+      measurementSlip: false
+  });
 
   const generateOrderId = () => {
       const date = new Date();
@@ -206,7 +222,17 @@ export default function NewOrderPage() {
     
     try {
         await addDoc(collection(db, "orders"), orderData);
-        setReceipt({...data, orderId });
+        setLastSavedOrder({
+            id: orderId,
+            customerName: customerName,
+            deliveryDate: data.deliveryDate,
+            total: data.sellingPrice,
+            paid: data.advance,
+            balance: data.sellingPrice - (data.advance || 0),
+            items: getOrderItems(data),
+            measurements: data.measurements
+        });
+        setDialogs(prev => ({...prev, postOrder: true}));
         toast({ title: "Order Created!", description: `Order ${orderId} has been saved.` });
         form.reset();
         generateOrderId();
@@ -222,6 +248,19 @@ export default function NewOrderPage() {
       currency: "INR",
     }).format(amount);
   };
+  
+  const getOrderItems = (data: OrderFormValues) => {
+      switch(data.orderType) {
+        case 'stitching':
+            return data.stitchingService || 'Stitching Service';
+        case 'readymade':
+            return readyMadeStock.find(i => i.id === data.readymadeId)?.item || 'Ready-made Item';
+        case 'fabric':
+            return fabricStock.find(f => f.id === data.fabricId)?.type || 'Fabric';
+        default:
+            return 'N/A';
+      }
+  }
 
   const getCustomerName = (receiptData: Partial<OrderFormValues> | null) => {
     if (!receiptData) return 'N/A';
@@ -422,7 +461,7 @@ export default function NewOrderPage() {
                       <CardDescription>Preview of the order details.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4 font-mono text-sm">
-                      <div className="flex justify-between"><span>Order ID:</span> <span>{receipt?.orderId || orderId}</span></div>
+                      <div className="flex justify-between"><span>Order ID:</span> <span>{orderId}</span></div>
                       <div className="flex justify-between"><span>Customer:</span> <span>{getCustomerName(watchedValues)}</span></div>
                       <div className="flex justify-between"><span>Delivery:</span> <span>{watchedValues.deliveryDate}</span></div>
                       <Separator/>
@@ -466,6 +505,46 @@ export default function NewOrderPage() {
           </div>
         </form>
       </Form>
+      
+      {lastSavedOrder && (
+          <>
+            <Dialog open={dialogs.postOrder} onOpenChange={(open) => setDialogs(p => ({...p, postOrder: open}))}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Order Created Successfully!</DialogTitle>
+                        <DialogDescription>
+                            Order #{lastSavedOrder.id} has been saved. What would you like to do next?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:justify-center">
+                        <Button variant="outline" onClick={() => setDialogs(p => ({...p, measurementSlip: true}))}>
+                            <Receipt className="mr-2 h-4 w-4"/> Measurement Slip
+                        </Button>
+                        <Button onClick={() => setDialogs(p => ({...p, invoice: true}))}>
+                            <FileText className="mr-2 h-4 w-4"/> Full Invoice
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
+                <DialogContent className="max-w-3xl p-0">
+                    <DialogHeader className="p-6 pb-0">
+                        <DialogTitle>Invoice #{lastSavedOrder.id}</DialogTitle>
+                        <DialogDescription>
+                            Review the invoice details below before printing.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Invoice order={lastSavedOrder} />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialogs.measurementSlip} onOpenChange={(open) => setDialogs(p => ({...p, measurementSlip: open}))}>
+                 <MeasurementSlip order={lastSavedOrder}/>
+            </Dialog>
+        </>
+      )}
+
     </div>
   );
 }
