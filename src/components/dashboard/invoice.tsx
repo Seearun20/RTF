@@ -19,6 +19,7 @@ interface InvoiceProps {
         paid: number;
         balance: number;
         items: string;
+        imageUrl?: string;
     };
 }
 
@@ -74,7 +75,14 @@ class InvoiceToPrint extends React.Component<InvoiceProps> {
                                 </thead>
                                 <tbody>
                                     <tr className="border-b">
-                                        <td className="p-3">{order.items}</td>
+                                        <td className="p-3">
+                                            <div className="flex items-center gap-4">
+                                                {order.imageUrl && (
+                                                    <img src={order.imageUrl} alt={order.items} className="w-16 h-16 object-cover rounded-md" />
+                                                )}
+                                                <span>{order.items}</span>
+                                            </div>
+                                        </td>
                                         <td className="p-3 text-right">{formatCurrency(order.total)}</td>
                                         <td className="p-3 text-right">{formatCurrency(order.total)}</td>
                                     </tr>
@@ -172,3 +180,5 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
         </div>
     )
 }
+
+    

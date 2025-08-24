@@ -77,6 +77,7 @@ export interface Order {
     stitchingService?: string;
     readymadeItemName?: string;
     readymadeSize?: string;
+    readymadeItemImageUrl?: string;
     fabricId?: string;
     measurements?: { [key: string]: string | undefined };
     createdAt: any; // Using any for Firestore Timestamp for simplicity
@@ -209,6 +210,7 @@ export default function OrdersPage() {
         status: order.status,
         items: getOrderItems(order),
         measurements: order.measurements,
+        imageUrl: order.readymadeItemImageUrl,
       }
   }
 
@@ -353,5 +355,7 @@ export default function OrdersPage() {
     </div>
   );
 }
+
+    
 
     

@@ -79,6 +79,7 @@ export interface ReadyMadeStock {
     cost: number;
     supplier: string;
     supplierPhone: string;
+    imageUrl?: string;
 }
 
 const addStockSchema = z.object({
@@ -89,6 +90,7 @@ const addStockSchema = z.object({
   cost: z.coerce.number().min(1, { message: "Cost is required" }),
   supplier: z.string().min(1, { message: "Supplier name is required" }),
   supplierPhone: z.string().min(10, { message: "Supplier phone must be at least 10 digits" }),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
 }).refine(data => {
     if (data.item === 'Custom' && (!data.customItem || data.customItem.trim() === '')) {
         return false;
@@ -113,6 +115,7 @@ function StockForm({ setOpen, stockItem }: { setOpen: (open: boolean) => void; s
       cost: stockItem?.cost || 0,
       supplier: stockItem?.supplier || "",
       supplierPhone: stockItem?.supplierPhone || "",
+      imageUrl: stockItem?.imageUrl || "",
     },
   });
 
@@ -229,6 +232,19 @@ function StockForm({ setOpen, stockItem }: { setOpen: (open: boolean) => void; s
                 )}
             />
         </div>
+        <FormField
+            control={form.control}
+            name="imageUrl"
+            render={({ field }) => (
+            <FormItem>
+                <FormLabel>Image URL (Optional)</FormLabel>
+                <FormControl>
+                <Input placeholder="https://example.com/image.png" {...field} />
+                </FormControl>
+                <FormMessage />
+            </FormItem>
+            )}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -359,7 +375,10 @@ export default function ReadyMadeStockPage() {
             <TableBody>
               {stock.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.item}</TableCell>
+                  <TableCell className="font-medium flex items-center gap-4">
+                     {item.imageUrl && <img src={item.imageUrl} alt={item.item} className="w-12 h-12 object-cover rounded-md"/>}
+                     <span>{item.item}</span>
+                  </TableCell>
                   <TableCell>{item.size}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{formatCurrency(item.cost)}</TableCell>
@@ -423,3 +442,4 @@ export default function ReadyMadeStockPage() {
   );
 }
 
+    

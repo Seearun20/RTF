@@ -76,8 +76,10 @@ const orderSchema = z.object({
   stitchingService: z.string().optional(),
   measurements: measurementSchema.optional(),
   
+  readymadeItemId: z.string().optional(),
   readymadeItemName: z.string().optional(),
   readymadeSize: z.string().optional(),
+  readymadeItemImageUrl: z.string().optional(),
 
   fabricId: z.string().optional(),
   fabricLength: z.coerce.number().optional(),
@@ -164,8 +166,10 @@ export default function NewOrderPage() {
       orderType: "stitching",
       deliveryDate: "",
       stitchingService: "",
+      readymadeItemId: "",
       readymadeItemName: "",
       readymadeSize: "",
+      readymadeItemImageUrl: "",
       fabricId: "",
       fabricLength: 0,
       sellingPrice: 0,
@@ -252,6 +256,15 @@ export default function NewOrderPage() {
             delete (orderData as any).newCustomerPhone;
             delete (orderData as any).newCustomerEmail;
             delete (orderData as any).customerType;
+            
+            if (data.orderType === 'readymade' && data.readymadeItemId) {
+              const itemRef = doc(db, 'readyMadeStock', data.readymadeItemId);
+              const itemDoc = await transaction.get(itemRef);
+              if (!itemDoc.exists() || itemDoc.data().quantity < 1) {
+                  throw new Error("Item is out of stock.");
+              }
+              transaction.update(itemRef, { quantity: itemDoc.data().quantity - 1 });
+            }
 
             const newOrderRef = doc(collection(db, "orders"));
             transaction.set(newOrderRef, orderData);
@@ -266,7 +279,8 @@ export default function NewOrderPage() {
                 paid: data.advance || 0,
                 balance: data.sellingPrice - (data.advance || 0),
                 items: getOrderItems(data),
-                measurements: data.measurements
+                measurements: data.measurements,
+                imageUrl: data.readymadeItemImageUrl,
             });
         });
 
@@ -308,9 +322,9 @@ export default function NewOrderPage() {
 
   const availableSizes = useMemo(() => {
       if (!watchedValues.readymadeItemName) return [];
-      return readyMadeStock
+      const items = readyMadeStock
         .filter(item => item.item === watchedValues.readymadeItemName && item.quantity > 0)
-        .map(item => item.size);
+      return items;
   }, [watchedValues.readymadeItemName, readyMadeStock]);
 
 
@@ -490,6 +504,8 @@ export default function NewOrderPage() {
                                         onValueChange={(value) => {
                                             field.onChange(value);
                                             setValue("readymadeSize", ""); // Reset size on item change
+                                            setValue("readymadeItemId", "");
+                                            setValue("readymadeItemImageUrl", "");
                                         }} 
                                         defaultValue={field.value}
                                     >
@@ -508,14 +524,25 @@ export default function NewOrderPage() {
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Size</FormLabel>
-                                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!watchedValues.readymadeItemName}>
+                                     <Select 
+                                        onValueChange={(value) => {
+                                            field.onChange(value);
+                                            const selectedStockItem = availableSizes.find(s => s.size === value);
+                                            if (selectedStockItem) {
+                                                setValue("readymadeItemId", selectedStockItem.id);
+                                                setValue("readymadeItemImageUrl", selectedStockItem.imageUrl || "");
+                                            }
+                                        }} 
+                                        defaultValue={field.value} 
+                                        disabled={!watchedValues.readymadeItemName}
+                                     >
                                         <FormControl>
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select a size" />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {availableSizes.map(size => <SelectItem key={size} value={size}>{size}</SelectItem>)}
+                                            {availableSizes.map(stock => <SelectItem key={stock.id} value={stock.size}>{stock.size} (Qty: {stock.quantity})</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
@@ -571,9 +598,12 @@ export default function NewOrderPage() {
                             </div>
                        )}
                        {watchedValues.orderType === 'readymade' && (
-                           <div className="p-4 bg-muted rounded-md">
-                               <p>{watchedValues.readymadeItemName}</p>
-                               <p className="text-xs">Size: {watchedValues.readymadeSize}</p>
+                           <div className="p-4 bg-muted rounded-md flex items-center gap-4">
+                               {watchedValues.readymadeItemImageUrl && <img src={watchedValues.readymadeItemImageUrl} alt={watchedValues.readymadeItemName || 'Item'} className="w-12 h-12 object-cover rounded-md"/>}
+                               <div>
+                                   <p>{watchedValues.readymadeItemName}</p>
+                                   <p className="text-xs">Size: {watchedValues.readymadeSize}</p>
+                               </div>
                            </div>
                        )}
                         {watchedValues.orderType === 'fabric' && (
