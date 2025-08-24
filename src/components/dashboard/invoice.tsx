@@ -4,7 +4,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { RtfLogo } from "@/components/rtf-logo";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import React from "react";
 import { useReactToPrint } from "react-to-print";
