@@ -26,7 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { readyMadeStock } from "@/lib/data";
 import { MoreHorizontal, PlusCircle, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +36,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -50,7 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -58,17 +68,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, DocumentData } from "firebase/firestore";
+
+export interface ReadyMadeStock {
+    id: string;
+    item: string;
+    size: string;
+    quantity: number;
+    cost: number;
+    supplier: string;
+    supplierPhone: string;
+}
 
 const addStockSchema = z.object({
   item: z.string().min(1, { message: "Item name is required" }),
   customItem: z.string().optional(),
   size: z.string().min(1, { message: "Size is required" }),
-  quantity: z.coerce.number().min(1, { message: "Quantity must be at least 1" }),
+  quantity: z.coerce.number().min(0, { message: "Quantity must be a positive number" }),
   cost: z.coerce.number().min(1, { message: "Cost is required" }),
   supplier: z.string().min(1, { message: "Supplier name is required" }),
   supplierPhone: z.string().min(10, { message: "Supplier phone must be at least 10 digits" }),
 }).refine(data => {
-    if (data.item === 'Custom' && !data.customItem) {
+    if (data.item === 'Custom' && (!data.customItem || data.customItem.trim() === '')) {
         return false;
     }
     return true;
@@ -77,42 +99,51 @@ const addStockSchema = z.object({
     path: ["customItem"],
 });
 
-function AddStockForm({ setOpen }: { setOpen: (open: boolean) => void }) {
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+type StockFormValues = z.infer<typeof addStockSchema>;
 
-  const form = useForm<z.infer<typeof addStockSchema>>({
+function StockForm({ setOpen, stockItem }: { setOpen: (open: boolean) => void; stockItem?: ReadyMadeStock | null }) {
+  const { toast } = useToast();
+  const form = useForm<StockFormValues>({
     resolver: zodResolver(addStockSchema),
     defaultValues: {
-      item: "",
+      item: stockItem?.item || "",
       customItem: "",
-      size: "",
-      quantity: 1,
-      cost: 0,
-      supplier: "",
-      supplierPhone: "",
+      size: stockItem?.size || "",
+      quantity: stockItem?.quantity || 1,
+      cost: stockItem?.cost || 0,
+      supplier: stockItem?.supplier || "",
+      supplierPhone: stockItem?.supplierPhone || "",
     },
   });
 
   const watchedItem = form.watch("item");
+  const isEditMode = !!stockItem;
 
-  const onSubmit = (values: z.infer<typeof addStockSchema>) => {
-    setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      const finalValues = {
-        ...values,
-        item: values.item === 'Custom' ? values.customItem : values.item,
-      };
-      delete finalValues.customItem;
-      console.log(finalValues);
-      toast({
-        title: "Success!",
-        description: `Successfully added ${finalValues.quantity} of ${finalValues.item} to stock.`,
-      });
-      setIsSubmitting(false);
-      setOpen(false);
-    }, 1000);
+  const onSubmit = async (values: StockFormValues) => {
+    const finalValues = {
+      ...values,
+      item: values.item === 'Custom' ? values.customItem : values.item,
+    };
+    delete (finalValues as Partial<StockFormValues>).customItem;
+    
+    try {
+        if(isEditMode && stockItem) {
+            await updateDoc(doc(db, "readyMadeStock", stockItem.id), finalValues);
+            toast({ title: "Stock Updated!", description: `${finalValues.item} has been updated.` });
+        } else {
+            await addDoc(collection(db, "readyMadeStock"), finalValues);
+            toast({ title: "Stock Added!", description: `Successfully added ${finalValues.quantity} of ${finalValues.item}.` });
+        }
+        setOpen(false);
+        form.reset();
+    } catch (error) {
+        console.error("Error saving stock item: ", error);
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "There was a problem saving the stock item.",
+        });
+    }
   };
 
   return (
@@ -227,16 +258,9 @@ function AddStockForm({ setOpen }: { setOpen: (open: boolean) => void }) {
             />
         </div>
         <DialogFooter>
-          <Button
-            type="submit"
-            className="w-full sm:w-auto"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              "Add to Inventory"
-            )}
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="submit" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? ( <Loader2 className="animate-spin" />) : (isEditMode ? "Save Changes" : "Add to Inventory")}
           </Button>
         </DialogFooter>
       </form>
@@ -245,22 +269,58 @@ function AddStockForm({ setOpen }: { setOpen: (open: boolean) => void }) {
 }
 
 export default function ReadyMadeStockPage() {
-  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const [stock, setStock] = useState<ReadyMadeStock[]>([]);
+  const [currentStockItem, setCurrentStockItem] = useState<ReadyMadeStock | null>(null);
+  const [dialogs, setDialogs] = useState({ add: false, edit: false, delete: false });
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "readyMadeStock"), (snapshot) => {
+        const stockData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReadyMadeStock));
+        setStock(stockData);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleActionClick = (stockItem: ReadyMadeStock, dialog: keyof typeof dialogs) => {
+      setCurrentStockItem(stockItem);
+      setDialogs(prev => ({ ...prev, [dialog]: true }));
+  };
+
+  const handleDelete = async () => {
+    if (!currentStockItem) return;
+    try {
+        await deleteDoc(doc(db, "readyMadeStock", currentStockItem.id));
+        toast({
+            variant: "destructive",
+            title: "Stock Deleted",
+            description: `${currentStockItem.item} has been removed from your inventory.`
+        });
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Could not delete stock item."
+        })
+    }
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
     }).format(amount);
   };
+  
   return (
     <div className="space-y-8">
       <PageHeader
         title="Ready-Made Stock"
         subtitle="Manage your sherwanis, suits, and blazers."
       >
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={dialogs.add} onOpenChange={(open) => setDialogs(p => ({...p, add: open}))}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => { setCurrentStockItem(null); setDialogs(p => ({...p, add: true}))}}>
               <PlusCircle className="mr-2 h-4 w-4" /> Add Stock
             </Button>
           </DialogTrigger>
@@ -271,7 +331,7 @@ export default function ReadyMadeStockPage() {
                 Fill in the details below to add a new item to your inventory.
               </DialogDescription>
             </DialogHeader>
-            <AddStockForm setOpen={setOpen} />
+            <StockForm setOpen={(open) => setDialogs(p => ({...p, add: open}))} />
           </DialogContent>
         </Dialog>
       </PageHeader>
@@ -297,7 +357,7 @@ export default function ReadyMadeStockPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {readyMadeStock.map((item) => (
+              {stock.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.item}</TableCell>
                   <TableCell>{item.size}</TableCell>
@@ -305,23 +365,40 @@ export default function ReadyMadeStockPage() {
                   <TableCell>{formatCurrency(item.cost)}</TableCell>
                   <TableCell>{item.supplier}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-destructive">
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <AlertDialog>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem onSelect={() => handleActionClick(item, 'edit')}>Edit</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <AlertDialogTrigger asChild>
+                             <DropdownMenuItem className="text-destructive" onSelect={() => setCurrentStockItem(item)}>
+                                Delete
+                            </DropdownMenuItem>
+                          </AlertDialogTrigger>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                       <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete {currentStockItem?.item}.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Back</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDelete}>
+                                Yes, Delete
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
@@ -329,6 +406,20 @@ export default function ReadyMadeStockPage() {
           </Table>
         </CardContent>
       </Card>
+      
+      {currentStockItem && (
+        <Dialog open={dialogs.edit} onOpenChange={(open) => setDialogs(p => ({...p, edit: open}))}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit Stock Item</DialogTitle>
+                    <DialogDescription>Update the details for {currentStockItem.item}.</DialogDescription>
+                </DialogHeader>
+                <StockForm setOpen={(open) => setDialogs(p => ({...p, edit: open}))} stockItem={currentStockItem} />
+            </DialogContent>
+        </Dialog>
+      )}
+
     </div>
   );
 }
+
