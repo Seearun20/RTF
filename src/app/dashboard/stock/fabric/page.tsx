@@ -124,13 +124,13 @@ function FabricForm({ setOpen, fabricItem }: { setOpen: (open: boolean) => void;
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField control={form.control} name="type" render={({ field }) => ( <FormItem> <FormLabel>Fabric Type</FormLabel> <FormControl> <Input placeholder="e.g., Italian Wool" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="length" render={({ field }) => ( <FormItem> <FormLabel>Length (mtrs)</FormLabel> <FormControl> <Input type="number" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="costPerMtr" render={({ field }) => ( <FormItem> <FormLabel>Cost per Meter</FormLabel> <FormControl> <Input type="number" placeholder="Cost per meter" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
+          <FormField control={form.control} name="type" render={({ field }) => (<FormItem><FormLabel>Fabric Type</FormLabel><FormControl><Input placeholder="e.g., Italian Wool" {...field} /></FormControl><FormMessage /></FormItem>)} />
+          <FormField control={form.control} name="length" render={({ field }) => (<FormItem><FormLabel>Length (mtrs)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>)} />
+          <FormField control={form.control} name="costPerMtr" render={({ field }) => (<FormItem><FormLabel>Cost per Meter</FormLabel><FormControl><Input type="number" placeholder="Cost per meter" {...field} /></FormControl><FormMessage /></FormItem>)} />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField control={form.control} name="supplier" render={({ field }) => ( <FormItem> <FormLabel>Supplier</FormLabel> <FormControl> <Input placeholder="e.g., Fabric Mart" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
-            <FormField control={form.control} name="supplierPhone" render={({ field }) => ( <FormItem> <FormLabel>Supplier Phone</FormLabel> <FormControl> <Input placeholder="e.g., 9876543210" {...field} /> </FormControl> <FormMessage /> </FormItem> )}/>
+            <FormField control={form.control} name="supplier" render={({ field }) => (<FormItem><FormLabel>Supplier</FormLabel><FormControl><Input placeholder="e.g., Fabric Mart" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+            <FormField control={form.control} name="supplierPhone" render={({ field }) => (<FormItem><FormLabel>Supplier Phone</FormLabel><FormControl><Input placeholder="e.g., 9876543210" {...field} /></FormControl><FormMessage /></FormItem>)}/>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
