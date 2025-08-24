@@ -26,13 +26,14 @@ import {
 } from "@/components/ui/sidebar";
 import { RtfLogo } from "@/components/rtf-logo";
 import { Button } from "@/components/ui/button";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion"
+import { useEffect } from "react";
 
 
 export default function DashboardLayout({
@@ -41,9 +42,26 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    const loginDate = localStorage.getItem('loginDate');
+    const today = new Date().toISOString().split('T')[0];
+    if (loginDate !== today) {
+        // Clear session and redirect to login
+        localStorage.removeItem('loginDate');
+        router.push('/');
+    }
+  }, [router]);
+
 
   const isActive = (path: string) => pathname === path;
   const isParentActive = (path: string) => pathname.startsWith(path);
+  
+  const handleLogout = () => {
+      localStorage.removeItem('loginDate');
+      router.push('/');
+  }
 
   return (
     <SidebarProvider>
@@ -155,12 +173,10 @@ export default function DashboardLayout({
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
-          <Link href="/" passHref>
-            <SidebarMenuButton>
+            <SidebarMenuButton onClick={handleLogout}>
               <LogOut />
               <span>Logout</span>
             </SidebarMenuButton>
-          </Link>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>

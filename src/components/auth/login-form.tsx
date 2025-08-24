@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -19,40 +19,69 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// In a real app, you'd fetch signatories from your database
+const PROPRIETOR_EMAIL = "seearun20@gmail.com";
+const MOCK_SIGNATORIES = [
+  { email: "employee1@example.com", name: "Ramesh Kumar" },
+  { email: "employee2@example.com", name: "Suresh Singh" },
+];
+
+const LoginSchema = z.object({
+  role: z.string().min(1, "Please select a role."),
+  email: z.string().email("Please enter a valid email address."),
+}).refine(data => {
+    if (data.role === 'proprietor' && data.email !== PROPRIETOR_EMAIL) {
+        return false;
+    }
+    return true;
+}, {
+    message: `Email for proprietor must be ${PROPRIETOR_EMAIL}`,
+    path: ["email"],
+});
+
 
 const OTPSchema = z.object({
   otp: z.string().min(6, { message: "Your OTP must be 6 characters." }),
 });
 
-const PhoneSchema = z.object({
-  phone: z
-    .string()
-    .min(10, { message: "Phone number must be at least 10 digits." }),
-});
-
-function PhoneStep({
-  onPhoneSubmit,
-}: {
-  onPhoneSubmit: (phoneNumber: string) => void;
-}) {
+function EmailStep({ onEmailSubmit }: { onEmailSubmit: (email: string) => void; }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const form = useForm<z.infer<typeof PhoneSchema>>({
-    resolver: zodResolver(PhoneSchema),
-    defaultValues: { phone: "" },
+  const form = useForm<z.infer<typeof LoginSchema>>({
+    resolver: zodResolver(LoginSchema),
+    defaultValues: { role: "", email: "" },
   });
 
-  const handleSubmit = (values: z.infer<typeof PhoneSchema>) => {
+  const watchedRole = form.watch("role");
+
+  useEffect(() => {
+    if (watchedRole === "proprietor") {
+      form.setValue("email", PROPRIETOR_EMAIL);
+    } else {
+        form.setValue("email", "");
+    }
+  }, [watchedRole, form]);
+
+
+  const handleSubmit = (values: z.infer<typeof LoginSchema>) => {
     setIsSubmitting(true);
     // Simulate API call to send OTP
     setTimeout(() => {
       toast({
         title: "OTP Sent!",
-        description: `An OTP has been sent to ${values.phone}. (Hint: Use 123456)`,
+        description: `An OTP has been sent to ${values.email}. (Hint: Use 123456)`,
       });
       setIsSubmitting(false);
-      onPhoneSubmit(values.phone);
+      onEmailSubmit(values.email);
     }, 1000);
   };
 
@@ -61,18 +90,47 @@ function PhoneStep({
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <FormField
           control={form.control}
-          name="phone"
+          name="role"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input placeholder="Your 10-digit phone number" {...field} />
-              </FormControl>
+              <FormLabel>Role</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="proprietor">Proprietor</SelectItem>
+                  {MOCK_SIGNATORIES.map(s => (
+                     <SelectItem key={s.email} value={s.email}>Signatory: {s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full font-bold" disabled={isSubmitting}>
+        {watchedRole && (
+             <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                        <Input 
+                            placeholder="Your email address" 
+                            {...field} 
+                            disabled={watchedRole === 'proprietor'}
+                        />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+            />
+        )}
+        <Button type="submit" className="w-full font-bold" disabled={isSubmitting || !watchedRole}>
           {isSubmitting ? <Loader2 className="animate-spin" /> : "Send OTP"}
         </Button>
       </form>
@@ -80,11 +138,7 @@ function PhoneStep({
   );
 }
 
-function OtpStep({
-  onBack,
-}: {
-  onBack: () => void;
-}) {
+function OtpStep({ onBack }: { onBack: () => void; }) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -93,16 +147,21 @@ function OtpStep({
     resolver: zodResolver(OTPSchema),
     defaultValues: { otp: "" },
   });
+  
+  const setLoginTimestamp = () => {
+      const today = new Date().toISOString().split('T')[0];
+      localStorage.setItem('loginDate', today);
+  }
 
   const handleSubmit = (values: z.infer<typeof OTPSchema>) => {
     setIsSubmitting(true);
-    // Simulate API call to verify OTP
     setTimeout(() => {
       if (values.otp === "123456") {
         toast({
           title: "Success!",
           description: "You have been logged in successfully.",
         });
+        setLoginTimestamp();
         router.push("/dashboard");
       } else {
         toast({
@@ -139,7 +198,7 @@ function OtpStep({
           {isSubmitting ? <Loader2 className="animate-spin" /> : "Verify & Login"}
         </Button>
         <Button variant="link" size="sm" className="w-full" onClick={onBack}>
-          Back to phone number
+          Back
         </Button>
       </form>
     </Form>
@@ -147,18 +206,18 @@ function OtpStep({
 }
 
 export function LoginForm() {
-  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [step, setStep] = useState<"email" | "otp">("email");
 
-  const handlePhoneSubmit = (phoneNumber: string) => {
+  const handleEmailSubmit = (email: string) => {
     setStep("otp");
   };
 
   const handleBack = () => {
-    setStep("phone");
+    setStep("email");
   };
 
-  return step === "phone" ? (
-    <PhoneStep onPhoneSubmit={handlePhoneSubmit} />
+  return step === "email" ? (
+    <EmailStep onEmailSubmit={handleEmailSubmit} />
   ) : (
     <OtpStep onBack={handleBack} />
   );
