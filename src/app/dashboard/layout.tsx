@@ -153,9 +153,6 @@ function SignatoryManager({ onLockScreen, onSetPattern, toast }: { onLockScreen:
                             <span>Manage Signatories</span>
                         </DropdownMenuItem>
                     </DialogTrigger>
-                    <DropdownMenuItem disabled>
-                         <span>Settings</span>
-                    </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
 
