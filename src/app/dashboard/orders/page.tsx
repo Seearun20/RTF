@@ -198,7 +198,8 @@ export default function OrdersPage() {
       if (!order) return null;
       const balance = order.sellingPrice - (order.advance || 0);
       return {
-        id: order.orderId,
+        id: order.id, // Use firestore id
+        orderId: order.orderId,
         invoiceNumber: order.invoiceNumber,
         customerName: order.customerName,
         deliveryDate: order.deliveryDate,
@@ -329,11 +330,11 @@ export default function OrdersPage() {
          <>
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                {invoiceData && (
-                 <DialogContent className="max-w-2xl p-0">
+                 <DialogContent className="max-w-3xl p-0">
                     <DialogHeader className="p-6 pb-0">
                        <DialogTitle>Invoice #{invoiceData.invoiceNumber}</DialogTitle>
                        <DialogDescription>
-                         Review the invoice details below or print a copy for order {invoiceData.id}.
+                         Review the invoice details below or print a copy for order {invoiceData.orderId}.
                        </DialogDescription>
                      </DialogHeader>
                     <InvoicePrintWrapper order={invoiceData} />
