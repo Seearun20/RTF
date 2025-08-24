@@ -212,11 +212,11 @@ export default function NewOrderPage() {
   
   const totalBill = useMemo(() => {
     if (watchedValues.orderType === 'stitching') {
-        const servicePrice = watchedValues.sellingPrice || 0;
-        const fabricPrice = watchedValues.stitchingFabricPrice || 0;
+        const servicePrice = Number(watchedValues.sellingPrice) || 0;
+        const fabricPrice = Number(watchedValues.stitchingFabricPrice) || 0;
         return servicePrice + fabricPrice;
     }
-    return watchedValues.sellingPrice || 0;
+    return Number(watchedValues.sellingPrice) || 0;
   }, [watchedValues]);
 
   const handleFetchMeasurements = async () => {
@@ -561,7 +561,7 @@ export default function NewOrderPage() {
             {watchedValues.orderType === 'stitching' && (
                 <>
                 <Card>
-                    <CardHeader><CardTitle className="font-headline">Service & Fabric</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="font-headline">Service &amp; Fabric</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                          <FormField control={form.control} name="stitchingService" render={({ field }) => (<FormItem><FormLabel>Stitching Service</FormLabel><Select onValueChange={(value) => { field.onChange(value); setValue("sellingPrice", serviceCharges[value as keyof typeof serviceCharges] || 0) }} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a stitching service" /></SelectTrigger></FormControl><SelectContent>{Object.keys(serviceCharges).map((service) => (<SelectItem key={service} value={service}>{service}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>)}/>
@@ -681,12 +681,12 @@ export default function NewOrderPage() {
                             <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
                                 <div className="flex justify-between font-sans">
                                     <span className="font-semibold pb-2">{watchedValues.stitchingService}</span>
-                                    <span>{formatCurrency(watchedValues.sellingPrice || 0)}</span>
+                                    <span>{formatCurrency(Number(watchedValues.sellingPrice) || 0)}</span>
                                 </div>
                                 {watchedValues.fabricId && watchedValues.stitchingFabricLength && (
                                     <div className="flex justify-between font-sans text-xs pt-1">
                                         <span>+ {fabricStock.find(f => f.id === watchedValues.fabricId)?.type} ({watchedValues.stitchingFabricLength} m)</span>
-                                        <span>{formatCurrency(watchedValues.stitchingFabricPrice || 0)}</span>
+                                        <span>{formatCurrency(Number(watchedValues.stitchingFabricPrice) || 0)}</span>
                                     </div>
                                 )}
                                 {watchedValues.measurements && Object.values(watchedValues.measurements).some(v => v) && <Separator className="my-2"/>}
@@ -721,7 +721,7 @@ export default function NewOrderPage() {
                         <div className="flex justify-between text-destructive font-bold"><span>Balance:</span> <span>{formatCurrency(totalBill - (watchedValues.advance || 0))}</span></div>
                       </div>
                       <Button type="submit" className="w-full" disabled={isSubmitting}>
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : "Save & Generate Receipt"}
+                        {isSubmitting ? <Loader2 className="animate-spin" /> : "Save &amp; Generate Receipt"}
                       </Button>
                   </CardContent>
               </Card>
