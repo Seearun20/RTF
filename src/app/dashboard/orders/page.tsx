@@ -328,6 +328,12 @@ export default function OrdersPage() {
             <Dialog open={dialogs.invoice} onOpenChange={(open) => setDialogs(p => ({...p, invoice: open}))}>
                {invoiceData && (
                  <DialogContent className="max-w-3xl p-0">
+                    <DialogHeader className="p-6 pb-0">
+                       <DialogTitle>Invoice #{invoiceData.id}</DialogTitle>
+                       <DialogDescription>
+                         Review the invoice details below or print a copy.
+                       </DialogDescription>
+                     </DialogHeader>
                     <InvoicePrintWrapper order={invoiceData} />
                 </DialogContent>
                )}
