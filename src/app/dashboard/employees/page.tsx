@@ -26,7 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, PlusCircle, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Loader2, Calendar as CalendarIcon, Wallet } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -63,12 +63,16 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, increment } from "firebase/firestore";
 import { Textarea } from "@/components/ui/textarea";
 
 export interface Leave {
     date: string;
     description: string;
+}
+export interface Payment {
+    date: string;
+    amount: number;
 }
 export interface Employee {
     id: string;
@@ -77,6 +81,7 @@ export interface Employee {
     salary: number;
     balance: number;
     leaves: Leave[];
+    payments: Payment[];
 }
 
 const employeeSchema = z.object({
@@ -91,6 +96,13 @@ const addLeaveSchema = z.object({
     description: z.string().optional(),
 });
 type AddLeaveFormValues = z.infer<typeof addLeaveSchema>;
+
+const recordPaymentSchema = z.object({
+    date: z.string().min(1, "Date is required"),
+    amount: z.coerce.number().min(1, "Payment amount is required"),
+});
+type RecordPaymentFormValues = z.infer<typeof recordPaymentSchema>;
+
 
 function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void; employee?: Employee | null }) {
     const { toast } = useToast();
@@ -117,7 +129,7 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
                     description: `Successfully updated ${values.name}.`,
                 });
             } else {
-                const newEmployeeData = { ...values, balance: 0, leaves: [] };
+                const newEmployeeData = { ...values, balance: 0, leaves: [], payments: [] };
                 await addDoc(collection(db, "employees"), newEmployeeData);
                 toast({
                     title: "Employee Added!",
@@ -243,6 +255,83 @@ function AddLeaveForm({ employee, setOpen }: { employee: Employee; setOpen: (ope
     );
 }
 
+function RecordPaymentForm({ employee, setOpen }: { employee: Employee; setOpen: (open: boolean) => void }) {
+    const { toast } = useToast();
+    const form = useForm<RecordPaymentFormValues>({
+        resolver: zodResolver(recordPaymentSchema),
+        defaultValues: { date: new Date().toISOString().split("T")[0], amount: 0 },
+    });
+
+    const onSubmit = async (values: RecordPaymentFormValues) => {
+        try {
+            const employeeDoc = doc(db, "employees", employee.id);
+            await updateDoc(employeeDoc, {
+                payments: arrayUnion({ ...values }),
+                balance: increment(-values.amount) 
+            });
+            toast({
+                title: "Payment Recorded",
+                description: `Payment of ${formatCurrency(values.amount)} recorded for ${employee.name}.`,
+            });
+            setOpen(false);
+        } catch (error) {
+            console.error(error);
+            toast({ variant: "destructive", title: "Error", description: "Failed to record payment." });
+        }
+    };
+    
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
+    };
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                <FormField
+                    control={form.control}
+                    name="date"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Date of Payment</FormLabel>
+                            <FormControl><Input type="date" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={form.control}
+                    name="amount"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Amount</FormLabel>
+                            <FormControl><Input type="number" placeholder="Enter amount" {...field} /></FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                </div>
+                <div className="text-sm text-muted-foreground p-2 rounded-md bg-muted">
+                    Current balance due: <span className="font-bold">{formatCurrency(employee.balance)}</span>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" type="button" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                         {form.formState.isSubmitting ? <Loader2 className="animate-spin" /> : "Record Payment"}
+                    </Button>
+                </DialogFooter>
+            </form>
+        </Form>
+    );
+}
+
+const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+    }).format(amount);
+};
+
 export default function EmployeesPage() {
     const { toast } = useToast();
     const [employees, setEmployees] = useState<Employee[]>([]);
@@ -251,7 +340,8 @@ export default function EmployeesPage() {
         add: false,
         edit: false,
         delete: false,
-        pay: false,
+        payment: false,
+        paymentHistory: false,
         leaves: false,
         leaveHistory: false,
     });
@@ -268,28 +358,6 @@ export default function EmployeesPage() {
         setCurrentEmployee(employee);
         setDialogs(prev => ({ ...prev, [dialog]: true }));
     };
-
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat("en-IN", {
-            style: "currency",
-            currency: "INR",
-        }).format(amount);
-    };
-    
-    const handlePaySalary = async () => {
-        if(!currentEmployee) return;
-        try {
-            const employeeDoc = doc(db, "employees", currentEmployee.id);
-            await updateDoc(employeeDoc, { balance: 0 });
-            toast({
-                title: "Salary Paid!",
-                description: `Salary paid to ${currentEmployee.name}. Balance is now zero.`,
-            });
-            setDialogs(p => ({...p, pay: false}));
-        } catch (error) {
-            toast({ variant: "destructive", title: "Error", description: "Failed to pay salary." });
-        }
-    }
 
     const handleRemoveEmployee = async () => {
         if (!currentEmployee) return;
@@ -372,7 +440,8 @@ export default function EmployeesPage() {
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                     <DropdownMenuItem onSelect={() => handleActionClick(employee, 'edit')}>Edit Details</DropdownMenuItem>
-                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'pay')}>Pay Salary</DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'payment')}>Record Payment</DropdownMenuItem>
+                                                    <DropdownMenuItem onSelect={() => handleActionClick(employee, 'paymentHistory')}>View Payment History</DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem onSelect={() => handleActionClick(employee, 'leaves')}>Add Leave</DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => handleActionClick(employee, 'leaveHistory')}>View Leave History</DropdownMenuItem>
@@ -419,20 +488,41 @@ export default function EmployeesPage() {
                         </DialogContent>
                     </Dialog>
                     
-                    <Dialog open={dialogs.pay} onOpenChange={(open) => setDialogs(p => ({ ...p, pay: open }))}>
+                    <Dialog open={dialogs.payment} onOpenChange={(open) => setDialogs(p => ({...p, payment: open}))}>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Pay Salary</DialogTitle>
-                                <DialogDescription>Pay outstanding balance for {currentEmployee.name}.</DialogDescription>
+                                <DialogTitle>Record a Payment</DialogTitle>
+                                <DialogDescription>Record a salary payment for {currentEmployee.name}.</DialogDescription>
                             </DialogHeader>
-                            <div className="py-4">
-                                <p>Outstanding balance for <span className="font-medium">{currentEmployee.name}</span> is <span className="font-mono text-destructive">{formatCurrency(currentEmployee.balance)}</span>.</p>
-                                <p className="text-sm text-muted-foreground mt-2">Paying this will reset the balance to zero.</p>
+                            <RecordPaymentForm employee={currentEmployee} setOpen={(open) => setDialogs(p => ({ ...p, payment: open }))}/>
+                        </DialogContent>
+                    </Dialog>
+                    
+                     <Dialog open={dialogs.paymentHistory} onOpenChange={(open) => setDialogs(p => ({ ...p, paymentHistory: open }))}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Payment History: {currentEmployee.name}</DialogTitle>
+                                <DialogDescription>A record of all salary payments made.</DialogDescription>
+                            </DialogHeader>
+                            <div className="py-4 max-h-96 overflow-y-auto">
+                               {currentEmployee.payments?.length > 0 ? (
+                                    <ul className="space-y-3">
+                                        {currentEmployee.payments.map((payment, index) => (
+                                            <li key={index} className="flex items-center justify-between p-3 bg-muted rounded-md">
+                                                <div className="flex items-center gap-4">
+                                                    <Wallet className="h-5 w-5 text-muted-foreground"/>
+                                                    <div>
+                                                        <p className="font-semibold">{payment.date}</p>
+                                                    </div>
+                                                </div>
+                                                <p className="font-mono font-semibold">{formatCurrency(payment.amount)}</p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                               ) : (
+                                    <p className="text-center text-muted-foreground py-8">No payments have been recorded for this employee.</p>
+                               )}
                             </div>
-                            <DialogFooter>
-                                <Button variant="outline" onClick={() => setDialogs(p => ({ ...p, pay: false }))}>Cancel</Button>
-                                <Button onClick={handlePaySalary}>Confirm Payment</Button>
-                            </DialogFooter>
                         </DialogContent>
                     </Dialog>
 
@@ -477,3 +567,6 @@ export default function EmployeesPage() {
         </div>
     );
 }
+
+
+    
