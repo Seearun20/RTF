@@ -129,7 +129,7 @@ function EmployeeForm({ setOpen, employee }: { setOpen: (open: boolean) => void;
                     description: `Successfully updated ${values.name}.`,
                 });
             } else {
-                const newEmployeeData = { ...values, balance: 0, leaves: [], payments: [] };
+                const newEmployeeData = { ...values, balance: values.salary, leaves: [], payments: [] };
                 await addDoc(collection(db, "employees"), newEmployeeData);
                 toast({
                     title: "Employee Added!",
