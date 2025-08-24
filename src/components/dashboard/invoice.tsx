@@ -10,8 +10,8 @@ import React from "react";
 
 interface InvoiceProps {
     order: {
-        id: string; // This is now the Firestore Document ID, not the Order ID
-        orderId: string;
+        id: string; 
+        orderId?: string; // Kept for cases where it might still be passed
         invoiceNumber: number;
         customerName: string;
         deliveryDate: string;
@@ -96,30 +96,54 @@ Invoice.displayName = "Invoice";
 
 export function InvoicePrintWrapper({ order }: InvoiceProps) {
     const componentRef = React.useRef(null);
-    const handlePrint = () => {
+    
+    const handlePrint = async () => {
         const printContent = (componentRef.current as HTMLDivElement | null)?.innerHTML;
         if (printContent) {
-             const printWindow = window.open('', '_blank');
-             printWindow?.document.write(`
-                <html>
-                    <head>
-                        <title>Print Invoice</title>
-                        <link rel="stylesheet" href="/globals.css">
-                        <style>
-                            @media print {
-                                body { -webkit-print-color-adjust: exact; padding: 1rem; }
-                            }
-                        </style>
-                    </head>
-                    <body>${printContent}</body>
-                </html>
-            `);
-            setTimeout(() => {
-                 printWindow?.document.close();
-                 printWindow?.focus();
-                 printWindow?.print();
-                 printWindow?.close();
-            }, 250);
+            try {
+                // Fetch the content of globals.css
+                const cssResponse = await fetch('/globals.css');
+                const cssText = await cssResponse.text();
+
+                const printWindow = window.open('', '_blank');
+                if (!printWindow) {
+                    alert('Please allow popups for this website');
+                    return;
+                }
+                
+                printWindow.document.write(`
+                    <html>
+                        <head>
+                            <title>Print Invoice #${order.invoiceNumber}</title>
+                            <style>
+                                ${cssText}
+                                @media print {
+                                    body { -webkit-print-color-adjust: exact; padding: 1rem; }
+                                    .print\\:p-0 { padding: 0 !important; }
+                                    .print\\:shadow-none { box-shadow: none !important; }
+                                    .print\\:border-none { border: none !important; }
+                                }
+                            </style>
+                        </head>
+                        <body>${printContent}</body>
+                    </html>
+                `);
+
+                setTimeout(() => {
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                    printWindow.close();
+                }, 250);
+
+            } catch (error) {
+                console.error("Failed to fetch styles for printing:", error);
+                // Fallback for printing without styles if CSS fetch fails
+                const printWindow = window.open('', '_blank');
+                printWindow?.document.write(printContent);
+                printWindow?.document.close();
+                printWindow?.print();
+            }
         }
     };
     
@@ -135,5 +159,3 @@ export function InvoicePrintWrapper({ order }: InvoiceProps) {
         </div>
     )
 }
-
-    
