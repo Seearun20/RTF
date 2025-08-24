@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { serviceCharges } from "@/lib/data";
 import { Separator } from "@/components/ui/separator";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -76,7 +76,7 @@ const orderSchema = z.object({
   stitchingService: z.string().optional(),
   measurements: measurementSchema.optional(),
   
-  readymadeId: z.string().optional(),
+  readymadeItemName: z.string().optional(),
   readymadeSize: z.string().optional(),
 
   fabricId: z.string().optional(),
@@ -166,7 +166,7 @@ export default function NewOrderPage() {
       sellingPrice: 0,
       advance: 0,
       stitchingService: "",
-      readymadeId: "",
+      readymadeItemName: "",
       readymadeSize: "",
       fabricId: "",
       fabricLength: 0,
@@ -273,13 +273,26 @@ export default function NewOrderPage() {
         case 'stitching':
             return data.stitchingService || 'Stitching Service';
         case 'readymade':
-            return readyMadeStock.find(i => i.id === data.readymadeId)?.item || 'Ready-made Item';
+            return `${data.readymadeItemName} (Size: ${data.readymadeSize})` || 'Ready-made Item';
         case 'fabric':
             return fabricStock.find(f => f.id === data.fabricId)?.type || 'Fabric';
         default:
             return 'N/A';
       }
   }
+  
+  const uniqueReadyMadeItems = useMemo(() => {
+    const itemNames = new Set(readyMadeStock.map(item => item.item));
+    return Array.from(itemNames);
+  }, [readyMadeStock]);
+
+  const availableSizes = useMemo(() => {
+      if (!watchedValues.readymadeItemName) return [];
+      return readyMadeStock
+        .filter(item => item.item === watchedValues.readymadeItemName && item.quantity > 0)
+        .map(item => item.size);
+  }, [watchedValues.readymadeItemName, readyMadeStock]);
+
 
   const getCustomerName = (receiptData: Partial<OrderFormValues> | null) => {
     if (!receiptData) return 'N/A';
@@ -447,8 +460,48 @@ export default function NewOrderPage() {
                 <Card>
                     <CardHeader><CardTitle className="font-headline">Ready-Made Item Details</CardTitle></CardHeader>
                      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField control={form.control} name="readymadeId" render={({ field }) => (<FormItem><FormLabel>Item</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger></FormControl><SelectContent>{readyMadeStock.map(i => <SelectItem key={i.id} value={i.id}>{i.item}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)}/>
-                         <FormField control={form.control} name="readymadeSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><FormControl><Input placeholder="Enter size" {...field} /></FormControl><FormMessage /></FormItem>)}/>
+                         <FormField 
+                            control={form.control} 
+                            name="readymadeItemName" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Item</FormLabel>
+                                    <Select 
+                                        onValueChange={(value) => {
+                                            field.onChange(value);
+                                            setValue("readymadeSize", ""); // Reset size on item change
+                                        }} 
+                                        defaultValue={field.value}
+                                    >
+                                        <FormControl><SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            {uniqueReadyMadeItems.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <FormField 
+                            control={form.control} 
+                            name="readymadeSize" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Size</FormLabel>
+                                     <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!watchedValues.readymadeItemName}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select a size" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {availableSizes.map(size => <SelectItem key={size} value={size}>{size}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -499,7 +552,7 @@ export default function NewOrderPage() {
                        )}
                        {watchedValues.orderType === 'readymade' && (
                            <div className="p-4 bg-muted rounded-md">
-                               <p>{readyMadeStock.find(i => i.id === watchedValues.readymadeId)?.item}</p>
+                               <p>{watchedValues.readymadeItemName}</p>
                                <p className="text-xs">Size: {watchedValues.readymadeSize}</p>
                            </div>
                        )}
@@ -567,3 +620,5 @@ export default function NewOrderPage() {
     </div>
   );
 }
+
+    
