@@ -154,6 +154,12 @@ export function MeasurementSlip({ order }: MeasurementSlipProps) {
 
   return (
     <DialogContent className="sm:max-w-sm">
+        <DialogHeader className="print:hidden">
+            <DialogTitle>Measurement Slip</DialogTitle>
+            <DialogDescription>
+                A printable slip with customer measurements for the tailor.
+            </DialogDescription>
+        </DialogHeader>
         <div id="measurement-slip-content">
             <div className="slip-header text-center mb-4">
                 <StitchSavvyLogo className="w-12 h-12 text-primary mx-auto" />
